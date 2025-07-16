@@ -26,6 +26,7 @@ type Appointment = {
     start_time: string; // ISO string
 };
 
+// Correctly type the props for a dynamic route page
 export default function ProfessionalProfilePage({ params }: { params: { id: string } }) {
     const supabase = createClientComponentClient();
     const professionalId = params.id;
@@ -93,7 +94,7 @@ export default function ProfessionalProfilePage({ params }: { params: { id: stri
             return;
         }
 
-        const isFirstConsult = existingAppointments.length === 0;
+        const isFirstConsult = existingAppointments ? existingAppointments.length === 0 : true;
         const price = isFirstConsult ? 0 : profile.hourly_rate;
 
         const [hour, minute] = selectedSlot.split(':').map(Number);
