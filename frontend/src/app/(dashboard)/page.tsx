@@ -2,9 +2,8 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import DashboardClient from './DashboardClient'; // You should have this client component from previous steps
+import DashboardClient from './DashboardClient'; // Import the client component
 
-// This line tells Next.js to render this page dynamically at request time
 export const dynamic = 'force-dynamic';
 
 type AppointmentWithOtherParty = {
@@ -17,27 +16,23 @@ type AppointmentWithOtherParty = {
 export default async function DashboardPage() {
     const supabase = createServerComponentClient({ cookies });
 
-    // Middleware has already checked for a session, but we get it again
-    // to fetch the user's specific data.
     const { data: { session } } = await supabase.auth.getSession();
-
-    // A fallback is still good practice.
     if (!session) {
         redirect('/login');
     }
 
+    // Correctly fetch the profile using the 'user_id' column
     const { data: profile } = await supabase
         .from('profiles')
         .select('role, full_name')
-        .eq('id', session.user.id)
+        .eq('user_id', session.user.id) // This line is now fixed
         .single();
 
     if (!profile) {
-        // This could happen if the DB trigger failed.
+        // This could happen if the DB trigger failed. Redirecting to login is safer.
         redirect('/login');
     }
 
-    // The role check redirect is still necessary here.
     if (!profile.role) {
         redirect('/role-selection');
     }
