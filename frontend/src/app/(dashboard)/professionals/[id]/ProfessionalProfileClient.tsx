@@ -1,3 +1,4 @@
+// app/(dashboard)/professionals/[id]/ProfessionalProfileClient.tsx
 'use client';
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -40,26 +41,12 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
-            const { data: profileData } = await supabase
-                .from('profiles')
-                .select('id, full_name, bio, specialties, hourly_rate, role')
-                .eq('id', professionalId)
-                .single();
+            const { data: profileData } = await supabase.from('profiles').select('id, full_name, bio, specialties, hourly_rate, role').eq('id', professionalId).single();
             setProfile(profileData);
-
-            const { data: availabilityData } = await supabase
-                .from('availability')
-                .select('day_of_week, start_time, end_time')
-                .eq('professional_id', professionalId);
+            const { data: availabilityData } = await supabase.from('availability').select('day_of_week, start_time, end_time').eq('professional_id', professionalId);
             setAvailability(availabilityData || []);
-
-            const { data: appointmentData } = await supabase
-                .from('appointments')
-                .select('start_time')
-                .eq('professional_id', professionalId)
-                .gte('start_time', new Date().toISOString());
+            const { data: appointmentData } = await supabase.from('appointments').select('start_time').eq('professional_id', professionalId).gte('start_time', new Date().toISOString());
             setAppointments(appointmentData || []);
-
             setLoading(false);
         };
         fetchData();
@@ -69,21 +56,14 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
         const dayOfWeek = getDay(selectedDate);
         const professionalAvailability = availability.find(a => a.day_of_week === dayOfWeek);
         if (!professionalAvailability) return [];
-
-        const bookedSlots = appointments
-            .map(apt => parseISO(apt.start_time))
-            .filter(d => format(d, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd'))
-            .map(d => format(d, 'HH:mm'));
-
+        const bookedSlots = appointments.map(apt => parseISO(apt.start_time)).filter(d => format(d, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd')).map(d => format(d, 'HH:mm'));
         const slots = [];
         const startTime = parseInt(professionalAvailability.start_time.split(':')[0]);
         const endTime = parseInt(professionalAvailability.end_time.split(':')[0]);
-
         for (let hour = startTime; hour < endTime; hour++) {
             const time = `${String(hour).padStart(2, '0')}:00`;
             if (!bookedSlots.includes(time)) slots.push(time);
         }
-
         return slots;
     }, [selectedDate, availability, appointments]);
 
@@ -103,33 +83,30 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
             return;
         }
 
-        const { count, error: checkError } = await supabase
-            .from('appointments')
-            .select('*', { count: 'exact', head: true })
-            .eq('client_id', user.id);
+        // Get the client's own profile to find their profile ID
+        const { data: clientProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('user_id', user.id)
+            .single();
 
-        if (checkError) {
-            alert("Error checking your appointment history. Please try again.");
+        if (!clientProfile) {
+            alert("Could not find your profile to book the appointment.");
             setIsBooking(false);
             return;
         }
+
+        const { count } = await supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('client_id', clientProfile.id);
 
         const isFirstConsult = count === 0;
         const price = isFirstConsult ? 0 : profile.hourly_rate;
 
         const [hour, minute] = selectedSlot.split(':').map(Number);
-        const appointmentStartTime = set(selectedDate, {
-            hours: hour,
-            minutes: minute,
-            seconds: 0,
-            milliseconds: 0,
-        });
-        const appointmentEndTime = set(appointmentStartTime, {
-            hours: appointmentStartTime.getHours() + 1,
-        });
+        const appointmentStartTime = set(selectedDate, { hours: hour, minutes: minute, seconds: 0, milliseconds: 0 });
+        const appointmentEndTime = set(appointmentStartTime, { hours: appointmentStartTime.getHours() + 1 });
 
         const { error: insertError } = await supabase.from('appointments').insert({
-            client_id: user.id,
+            client_id: clientProfile.id, // Use the correct client profile ID
             professional_id: professionalId,
             start_time: appointmentStartTime.toISOString(),
             end_time: appointmentEndTime.toISOString(),
@@ -146,7 +123,6 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
             setSelectedSlot(null);
             alert('Appointment booked successfully!');
         }
-
         setIsBooking(false);
     };
 
@@ -168,61 +144,40 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
                     <p className="text-gray-300 mb-6">{profile.bio}</p>
                     {profile.specialties && profile.specialties.length > 0 && (
                         <div>
-                            <h3 className="font-semibold mb-2 flex items-center text-xl">
-                                <Award size={22} className="mr-2 text-green-400" /> Specialties
-                            </h3>
+                            <h3 className="font-semibold mb-2 flex items-center text-xl"><Award size={22} className="mr-2 text-green-400"/> Specialties</h3>
                             <div className="flex flex-wrap gap-2">
-                                {profile.specialties.map(spec => (
-                                    <span key={spec} className="bg-gray-700 text-gray-200 text-sm px-3 py-1 rounded-full">{spec}</span>
-                                ))}
+                                {profile.specialties.map(spec => (<span key={spec} className="bg-gray-700 text-gray-200 text-sm px-3 py-1 rounded-full">{spec}</span>))}
                             </div>
                         </div>
                     )}
                 </div>
                 <div className="lg:col-span-2 bg-gray-800 p-6 rounded-2xl">
-                    <h2 className="text-2xl font-bold mb-4 flex items-center">
-                        <Calendar size={24} className="mr-3 text-green-400" /> Book an Appointment
-                    </h2>
+                    <h2 className="text-2xl font-bold mb-4 flex items-center"><Calendar size={24} className="mr-3 text-green-400" /> Book an Appointment</h2>
                     <div className="flex items-center justify-between mb-4">
-                        <button onClick={() => setSelectedDate(addDays(selectedDate, -1))} className="p-2 rounded-full hover:bg-gray-700"><ChevronLeft /></button>
+                        <button onClick={() => setSelectedDate(addDays(selectedDate, -1))} className="p-2 rounded-full hover:bg-gray-700"><ChevronLeft/></button>
                         <h3 className="text-xl font-semibold">{format(selectedDate, 'MMMM do, yyyy')}</h3>
-                        <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="p-2 rounded-full hover:bg-gray-700"><ChevronRight /></button>
+                        <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="p-2 rounded-full hover:bg-gray-700"><ChevronRight/></button>
                     </div>
                     <div className="border-t border-gray-700 pt-4">
-                        <h4 className="font-semibold mb-4 flex items-center">
-                            <Clock size={18} className="mr-2 text-green-400" /> Available Slots for {format(selectedDate, 'eeee')}
-                        </h4>
+                        <h4 className="font-semibold mb-4 flex items-center"><Clock size={18} className="mr-2 text-green-400"/> Available Slots for {format(selectedDate, 'eeee')}</h4>
                         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
                             {availableTimeSlots.length > 0 ? (
-                                availableTimeSlots.map(time => (
-                                    <button
-                                        key={time}
-                                        onClick={() => handleSlotClick(time)}
-                                        className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-2 rounded-lg transition duration-300 text-center"
-                                    >
-                                        {time}
-                                    </button>
-                                ))
-                            ) : (
-                                <p className="text-gray-400 col-span-full">No available slots for this day.</p>
-                            )}
+                                availableTimeSlots.map(time => (<button key={time} onClick={() => handleSlotClick(time)} className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-2 rounded-lg transition duration-300 text-center">{time}</button>))
+                            ) : (<p className="text-gray-400 col-span-full">No available slots for this day.</p>)}
                         </div>
                     </div>
                 </div>
             </div>
-
             {showConfirmModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
                     <div className="bg-gray-800 rounded-2xl p-8 max-w-sm w-full shadow-lg text-white">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-2xl font-bold text-green-400">Confirm Booking</h2>
-                            <button onClick={() => setShowConfirmModal(false)} className="text-gray-400 hover:text-white"><X size={24} /></button>
+                            <button onClick={() => setShowConfirmModal(false)} className="text-gray-400 hover:text-white"><X size={24}/></button>
                         </div>
                         <p className="mb-2">You are about to book an appointment with:</p>
                         <p className="font-bold text-lg mb-4">{profile.full_name}</p>
-                        <p className="mb-2">
-                            On <span className="font-semibold">{format(selectedDate, 'MMMM do, yyyy')}</span> at <span className="font-semibold">{selectedSlot}</span>.
-                        </p>
+                        <p className="mb-2">On <span className="font-semibold">{format(selectedDate, 'MMMM do, yyyy')}</span> at <span className="font-semibold">{selectedSlot}</span>.</p>
                         <div className="mt-6 flex justify-end gap-4">
                             <button onClick={() => setShowConfirmModal(false)} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Cancel</button>
                             <button onClick={handleConfirmBooking} disabled={isBooking} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-500">

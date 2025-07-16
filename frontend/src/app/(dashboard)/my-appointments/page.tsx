@@ -1,86 +1,63 @@
 // app/(dashboard)/my-appointments/page.tsx
-'use client';
-
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useEffect, useState, useCallback } from 'react';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { Calendar, User, Tag, IndianRupee } from 'lucide-react';
 import { format } from 'date-fns';
+import Link from 'next/link';
 
-// Define a more specific type for appointments to use in state
-type Appointment = {
-    id: number;
-    start_time: string;
-    price: number;
-    is_first_consult: boolean;
-    status: string;
-    professional?: { full_name: string };
-    client?: { full_name: string };
-};
+export const dynamic = 'force-dynamic';
 
-export default function MyAppointmentsPage() {
-    const supabase = createClientComponentClient();
-    const [loading, setLoading] = useState(true);
-    const [appointments, setAppointments] = useState<Appointment[]>([]);
-    const [userRole, setUserRole] = useState<string | null>(null);
+export default async function MyAppointmentsPage() {
+    const supabase = createServerComponentClient({ cookies });
 
-    const fetchAppointments = useCallback(async () => {
-        setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            setLoading(false);
-            return;
-        }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+        redirect('/login');
+    }
 
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-        if (profile) {
-            setUserRole(profile.role);
-            let query;
-            if (profile.role === 'client') {
-                query = supabase.from('appointments').select('*, professional:professional_id(full_name)').eq('client_id', user.id);
-            } else {
-                query = supabase.from('appointments').select('*, client:client_id(full_name)').eq('professional_id', user.id);
-            }
-            const { data, error } = await query.order('start_time', { ascending: true });
-            if (!error) setAppointments(data || []);
-        }
-        setLoading(false);
-    }, [supabase]);
+    // First, get the current user's profile, including their profile ID
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .eq('user_id', session.user.id)
+        .single();
 
-    useEffect(() => {
-        fetchAppointments();
-    }, [fetchAppointments]);
+    if (!profile) {
+        return <div className="text-red-400 p-8">Could not find your profile.</div>;
+    }
 
-    const handleCancelAppointment = async (appointmentId: number) => {
-        if (confirm('Are you sure you want to cancel this appointment?')) {
-            const { error } = await supabase
-                .from('appointments')
-                .update({ status: 'cancelled' })
-                .eq('id', appointmentId);
+    // Then, fetch appointments based on the user's role and profile ID
+    let appointmentsQuery;
+    if (profile.role === 'client') {
+        appointmentsQuery = supabase
+            .from('appointments')
+            .select('*, professional:professional_id(full_name)')
+            .eq('client_id', profile.id) // Correctly use profile.id
+            .order('start_time', { ascending: true });
+    } else {
+        appointmentsQuery = supabase
+            .from('appointments')
+            .select('*, client:client_id(full_name)')
+            .eq('professional_id', profile.id) // Correctly use profile.id
+            .order('start_time', { ascending: true });
+    }
 
-            if (error) {
-                alert('Failed to cancel appointment: ' + error.message);
-            } else {
-                // Update the state to reflect the change immediately
-                setAppointments(prev =>
-                    prev.map(apt =>
-                        apt.id === appointmentId ? { ...apt, status: 'cancelled' } : apt
-                    )
-                );
-            }
-        }
-    };
+    const { data: appointments, error } = await appointmentsQuery;
 
-    if (loading) {
-        return <div className="text-white text-center p-8">Loading appointments...</div>;
+    if (error) {
+        console.error("Error fetching appointments:", error);
+        return <div className="text-red-400 p-8">Error loading appointments.</div>;
     }
 
     return (
         <div className="max-w-5xl mx-auto p-4 sm:p-8 text-white">
             <h1 className="text-4xl font-bold mb-8">My Appointments</h1>
+
             <div className="space-y-6">
-                {appointments.length > 0 ? (
+                {appointments && appointments.length > 0 ? (
                     appointments.map(apt => {
-                        const otherPersonName = userRole === 'client' ? apt.professional?.full_name : apt.client?.full_name;
+                        const otherPersonName = profile.role === 'client' ? apt.professional.full_name : apt.client.full_name;
                         const appointmentDate = new Date(apt.start_time);
 
                         return (
@@ -94,7 +71,7 @@ export default function MyAppointmentsPage() {
                                     <div className="flex items-center gap-3 text-gray-300 mb-2">
                                         <User size={20} />
                                         <span>
-                      {userRole === 'client' ? 'With' : 'With Client'}: <span className="font-semibold text-white">{otherPersonName}</span>
+                      {profile.role === 'client' ? 'With' : 'With Client'}: <span className="font-semibold text-white">{otherPersonName}</span>
                     </span>
                                     </div>
                                     <div className="flex items-center gap-3 text-gray-300">
@@ -110,11 +87,9 @@ export default function MyAppointmentsPage() {
                                         <Tag size={20} />
                                         <span className="capitalize font-semibold">{apt.status}</span>
                                     </div>
+                                    {/* The cancel button would need to be moved to a client component to be interactive */}
                                     {apt.status === 'confirmed' && (
-                                        <button
-                                            onClick={() => handleCancelAppointment(apt.id)}
-                                            className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300"
-                                        >
+                                        <button className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 opacity-50 cursor-not-allowed">
                                             Cancel
                                         </button>
                                     )}
