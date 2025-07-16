@@ -2,7 +2,7 @@
 'use client';
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, FC } from 'react'; // Import FC (Functional Component)
 import { Award, Calendar, Clock, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { format, addDays, getDay, parseISO, set } from 'date-fns';
 
@@ -17,18 +17,22 @@ type ProfessionalProfile = {
 };
 
 type Availability = {
-    day_of_week: number; // 0 = Sunday, 6 = Saturday
-    start_time: string; // "HH:mm:ss"
+    day_of_week: number;
+    start_time: string;
     end_time: string;
 };
 
 type Appointment = {
-    start_time: string; // ISO string
+    start_time: string;
 };
 
-// This is the corrected component definition.
-// We define the props type directly in the function signature.
-export default function ProfessionalProfilePage({ params }: { params: { id: string } }) {
+// Define the props type for the page component
+interface ProfessionalProfilePageProps {
+    params: { id: string };
+}
+
+// Define the component using the FC type
+const ProfessionalProfilePage: FC<ProfessionalProfilePageProps> = ({ params }) => {
     const supabase = createClientComponentClient();
     const professionalId = params.id;
 
@@ -39,7 +43,6 @@ export default function ProfessionalProfilePage({ params }: { params: { id: stri
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [selectedDate, setSelectedDate] = useState(new Date());
 
-    // State for the confirmation modal
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
 
@@ -128,9 +131,7 @@ export default function ProfessionalProfilePage({ params }: { params: { id: stri
 
     return (
         <>
-            {/* Main Page Content */}
             <div className="max-w-6xl mx-auto p-4 sm:p-8 text-white grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Profile Info */}
                 <div className="lg:col-span-1 bg-gray-800 p-6 rounded-2xl self-start">
                     <h1 className="text-3xl font-bold">{profile.full_name}</h1>
                     <p className="text-lg capitalize text-green-400 mb-4">{profile.role}</p>
@@ -150,8 +151,6 @@ export default function ProfessionalProfilePage({ params }: { params: { id: stri
                         </div>
                     )}
                 </div>
-
-                {/* Right Column: Booking Calendar */}
                 <div className="lg:col-span-2 bg-gray-800 p-6 rounded-2xl">
                     <h2 className="text-2xl font-bold mb-4 flex items-center"><Calendar size={24} className="mr-3 text-green-400" /> Book an Appointment</h2>
                     <div className="flex items-center justify-between mb-4">
@@ -169,8 +168,6 @@ export default function ProfessionalProfilePage({ params }: { params: { id: stri
                     </div>
                 </div>
             </div>
-
-            {/* Confirmation Modal */}
             {showConfirmModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
                     <div className="bg-gray-800 rounded-2xl p-8 max-w-sm w-full shadow-lg text-white">
@@ -192,4 +189,6 @@ export default function ProfessionalProfilePage({ params }: { params: { id: stri
             )}
         </>
     );
-}
+};
+
+export default ProfessionalProfilePage;
