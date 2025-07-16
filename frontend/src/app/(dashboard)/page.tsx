@@ -2,7 +2,7 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import DashboardClient from './DashboardClient'; // Import the new client component
+import DashboardClient from './DashboardClient'; // Import the client component
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +40,7 @@ export default async function DashboardPage() {
         const { data } = await supabase.from('appointments').select('*, professional:professional_id(full_name)').eq('client_id', session.user.id).eq('status', 'confirmed').gte('start_time', new Date().toISOString()).order('start_time', { ascending: true }).limit(3);
         upcomingAppointments = data || [];
     } else {
-        // Corrected the query for professionals to use user_id
+        // This query is now corrected to use 'professional_id'
         const { data } = await supabase.from('appointments').select('*, client:client_id(full_name)').eq('professional_id', session.user.id).eq('status', 'confirmed').gte('start_time', new Date().toISOString()).order('start_time', { ascending: true }).limit(3);
         upcomingAppointments = data || [];
     }
