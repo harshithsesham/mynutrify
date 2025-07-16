@@ -26,13 +26,9 @@ type Appointment = {
     start_time: string;
 };
 
-// Define a specific interface for the page's props
-interface PageProps {
-    params: { id: string };
-}
-
-// Use the interface to type the component's props directly
-export default function ProfessionalProfilePage({ params }: PageProps) {
+// This is the corrected component definition.
+// We define the props type directly and simply in the function signature.
+export default function ProfessionalProfilePage({ params }: { params: { id: string } }) {
     const supabase = createClientComponentClient();
     const professionalId = params.id;
 
@@ -91,14 +87,19 @@ export default function ProfessionalProfilePage({ params }: PageProps) {
             return;
         }
 
-        const { data: existingAppointments, error: checkError } = await supabase.from('appointments').select('id', { count: 'exact' }).eq('client_id', user.id);
+        // Correctly check if the user has had any previous appointments
+        const { count, error: checkError } = await supabase
+            .from('appointments')
+            .select('*', { count: 'exact', head: true })
+            .eq('client_id', user.id);
+
         if (checkError) {
             alert("Error checking your appointment history. Please try again.");
             setIsBooking(false);
             return;
         }
 
-        const isFirstConsult = existingAppointments ? existingAppointments.length === 0 : true;
+        const isFirstConsult = count === 0;
         const price = isFirstConsult ? 0 : profile.hourly_rate;
 
         const [hour, minute] = selectedSlot.split(':').map(Number);
