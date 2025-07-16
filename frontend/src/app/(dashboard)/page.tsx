@@ -1,3 +1,4 @@
+// app/(dashboard)/page.tsx
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -5,7 +6,9 @@ import { Calendar, Link as LinkIcon } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 
-// Define a specific type for the appointment data we're fetching
+// This line tells Next.js to render this page dynamically at request time
+export const dynamic = 'force-dynamic';
+
 type AppointmentWithOtherParty = {
     id: number;
     start_time: string;
@@ -13,7 +16,6 @@ type AppointmentWithOtherParty = {
     client?: { full_name: string };
 };
 
-// This is the main dashboard page, acting as a Server Component.
 export default async function DashboardPage() {
     const supabase = createServerComponentClient({ cookies });
 
@@ -22,7 +24,6 @@ export default async function DashboardPage() {
         redirect('/login');
     }
 
-    // Fetch the user's profile to determine their role and name
     const { data: profile } = await supabase
         .from('profiles')
         .select('role, full_name')
@@ -33,12 +34,10 @@ export default async function DashboardPage() {
         return <div className="text-red-400 p-8">Could not load your profile.</div>;
     }
 
-    // If a new user lands here without a role, send them to selection
     if (!profile.role) {
         redirect('/role-selection');
     }
 
-    // Fetch data specific to the user's role
     let upcomingAppointments: AppointmentWithOtherParty[] = [];
     if (profile.role === 'client') {
         const { data } = await supabase
@@ -50,7 +49,7 @@ export default async function DashboardPage() {
             .order('start_time', { ascending: true })
             .limit(3);
         upcomingAppointments = data || [];
-    } else { // For 'nutritionist' or 'trainer'
+    } else {
         const { data } = await supabase
             .from('appointments')
             .select('*, client:client_id(full_name)')
@@ -68,7 +67,6 @@ export default async function DashboardPage() {
             <p className="text-lg capitalize text-green-400 mb-8">{profile.role} Dashboard</p>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Main Content: Upcoming Appointments */}
                 <div className="lg:col-span-2 bg-gray-800 p-6 rounded-2xl">
                     <h2 className="text-2xl font-semibold mb-4 flex items-center">
                         <Calendar size={24} className="mr-3 text-green-400" />
@@ -93,7 +91,6 @@ export default async function DashboardPage() {
                     </div>
                 </div>
 
-                {/* Sidebar: Quick Actions */}
                 <div className="lg:col-span-1 bg-gray-800 p-6 rounded-2xl">
                     <h2 className="text-2xl font-semibold mb-4 flex items-center">
                         <LinkIcon size={24} className="mr-3 text-green-400" />
