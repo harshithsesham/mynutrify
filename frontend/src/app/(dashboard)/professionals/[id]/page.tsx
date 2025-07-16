@@ -26,7 +26,12 @@ type Appointment = {
     start_time: string; // ISO string
 };
 
-export default function ProfessionalProfilePage({ params }: { params: { id: string } }) {
+// Define the props type for the page component
+interface ProfessionalProfilePageProps {
+    params: { id: string };
+}
+
+export default function ProfessionalProfilePage({ params }: ProfessionalProfilePageProps) {
     const supabase = createClientComponentClient();
     const professionalId = params.id;
 
