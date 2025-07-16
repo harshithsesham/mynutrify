@@ -1,10 +1,17 @@
-// app/(dashboard)/page.tsx
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { Calendar, Users, Link as LinkIcon } from 'lucide-react';
+import { Calendar, Link as LinkIcon } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
+
+// Define a specific type for the appointment data we're fetching
+type AppointmentWithOtherParty = {
+    id: number;
+    start_time: string;
+    professional?: { full_name: string };
+    client?: { full_name: string };
+};
 
 // This is the main dashboard page, acting as a Server Component.
 export default async function DashboardPage() {
@@ -32,7 +39,7 @@ export default async function DashboardPage() {
     }
 
     // Fetch data specific to the user's role
-    let upcomingAppointments = [];
+    let upcomingAppointments: AppointmentWithOtherParty[] = [];
     if (profile.role === 'client') {
         const { data } = await supabase
             .from('appointments')
@@ -69,11 +76,11 @@ export default async function DashboardPage() {
                     </h2>
                     <div className="space-y-4">
                         {upcomingAppointments.length > 0 ? (
-                            upcomingAppointments.map((apt: any) => (
+                            upcomingAppointments.map((apt) => (
                                 <div key={apt.id} className="bg-gray-700 p-4 rounded-lg flex justify-between items-center">
                                     <div>
                                         <p className="font-bold">{format(new Date(apt.start_time), 'MMMM do, yyyy')} at {format(new Date(apt.start_time), 'p')}</p>
-                                        <p className="text-gray-300">With {profile.role === 'client' ? apt.professional.full_name : apt.client.full_name}</p>
+                                        <p className="text-gray-300">With {profile.role === 'client' ? apt.professional?.full_name : apt.client?.full_name}</p>
                                     </div>
                                     <Link href="/my-appointments" className="text-green-400 hover:text-green-300 font-semibold">
                                         View
