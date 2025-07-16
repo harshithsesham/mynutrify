@@ -16,7 +16,7 @@ export default async function HomePage() {
   } else {
     // If the user is not logged in, send them to the login page
     // This path now matches your folder structure: src/app/auth/login/page.tsx
-    redirect('/auth/login');
+    redirect('/login');
   }
 
   // This component will never actually render anything because it always redirects.
