@@ -2,7 +2,7 @@
 'use client';
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useEffect, useState, useMemo, FC } from 'react'; // Import FC (Functional Component)
+import { useEffect, useState, useMemo } from 'react';
 import { Award, Calendar, Clock, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { format, addDays, getDay, parseISO, set } from 'date-fns';
 
@@ -26,13 +26,13 @@ type Appointment = {
     start_time: string;
 };
 
-// Define the props type for the page component
-interface ProfessionalProfilePageProps {
+// Define a specific interface for the page's props
+interface PageProps {
     params: { id: string };
 }
 
-// Define the component using the FC type
-const ProfessionalProfilePage: FC<ProfessionalProfilePageProps> = ({ params }) => {
+// Use the interface to type the component's props directly
+export default function ProfessionalProfilePage({ params }: PageProps) {
     const supabase = createClientComponentClient();
     const professionalId = params.id;
 
@@ -91,7 +91,7 @@ const ProfessionalProfilePage: FC<ProfessionalProfilePageProps> = ({ params }) =
             return;
         }
 
-        const { data: existingAppointments, error: checkError } = await supabase.from('appointments').select('id').eq('client_id', user.id).limit(1);
+        const { data: existingAppointments, error: checkError } = await supabase.from('appointments').select('id', { count: 'exact' }).eq('client_id', user.id);
         if (checkError) {
             alert("Error checking your appointment history. Please try again.");
             setIsBooking(false);
@@ -189,6 +189,4 @@ const ProfessionalProfilePage: FC<ProfessionalProfilePageProps> = ({ params }) =
             )}
         </>
     );
-};
-
-export default ProfessionalProfilePage;
+}
