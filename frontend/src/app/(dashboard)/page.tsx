@@ -2,9 +2,7 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { Calendar, Link as LinkIcon } from 'lucide-react';
-import Link from 'next/link';
-import { format } from 'date-fns';
+import DashboardClient from './DashboardClient'; // Import the new client component
 
 // This line tells Next.js to render this page dynamically at request time
 export const dynamic = 'force-dynamic';
@@ -31,7 +29,8 @@ export default async function DashboardPage() {
         .single();
 
     if (!profile) {
-        return <div className="text-red-400 p-8">Could not load your profile.</div>;
+        // This could happen if the trigger failed. Redirecting to login is safer.
+        redirect('/login');
     }
 
     if (!profile.role) {
@@ -61,58 +60,6 @@ export default async function DashboardPage() {
         upcomingAppointments = data || [];
     }
 
-    return (
-        <div className="max-w-7xl mx-auto p-4 sm:p-8 text-white">
-            <h1 className="text-4xl font-bold">Welcome back, {profile.full_name}!</h1>
-            <p className="text-lg capitalize text-green-400 mb-8">{profile.role} Dashboard</p>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 bg-gray-800 p-6 rounded-2xl">
-                    <h2 className="text-2xl font-semibold mb-4 flex items-center">
-                        <Calendar size={24} className="mr-3 text-green-400" />
-                        Upcoming Appointments
-                    </h2>
-                    <div className="space-y-4">
-                        {upcomingAppointments.length > 0 ? (
-                            upcomingAppointments.map((apt) => (
-                                <div key={apt.id} className="bg-gray-700 p-4 rounded-lg flex justify-between items-center">
-                                    <div>
-                                        <p className="font-bold">{format(new Date(apt.start_time), 'MMMM do, yyyy')} at {format(new Date(apt.start_time), 'p')}</p>
-                                        <p className="text-gray-300">With {profile.role === 'client' ? apt.professional?.full_name : apt.client?.full_name}</p>
-                                    </div>
-                                    <Link href="/my-appointments" className="text-green-400 hover:text-green-300 font-semibold">
-                                        View
-                                    </Link>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="text-gray-400">You have no upcoming appointments.</p>
-                        )}
-                    </div>
-                </div>
-
-                <div className="lg:col-span-1 bg-gray-800 p-6 rounded-2xl">
-                    <h2 className="text-2xl font-semibold mb-4 flex items-center">
-                        <LinkIcon size={24} className="mr-3 text-green-400" />
-                        Quick Links
-                    </h2>
-                    <div className="space-y-4">
-                        <Link href="/my-appointments" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
-                            View All Appointments
-                        </Link>
-                        {profile.role === 'client' && (
-                            <Link href="/find-a-pro" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
-                                Find a New Professional
-                            </Link>
-                        )}
-                        {(profile.role === 'nutritionist' || profile.role === 'trainer') && (
-                            <Link href="/settings/profile" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
-                                Edit Profile & Availability
-                            </Link>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+    // Render the Client Component and pass the fetched data as props
+    return <DashboardClient profile={profile} upcomingAppointments={upcomingAppointments} />;
 }
