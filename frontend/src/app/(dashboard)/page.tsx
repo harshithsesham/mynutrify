@@ -2,7 +2,7 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import DashboardClient from './DashboardClient'; // Import the new client component
+import DashboardClient from './DashboardClient'; // You should have this client component from previous steps
 
 // This line tells Next.js to render this page dynamically at request time
 export const dynamic = 'force-dynamic';
@@ -17,7 +17,11 @@ type AppointmentWithOtherParty = {
 export default async function DashboardPage() {
     const supabase = createServerComponentClient({ cookies });
 
+    // Middleware has already checked for a session, but we get it again
+    // to fetch the user's specific data.
     const { data: { session } } = await supabase.auth.getSession();
+
+    // A fallback is still good practice.
     if (!session) {
         redirect('/login');
     }
@@ -29,34 +33,21 @@ export default async function DashboardPage() {
         .single();
 
     if (!profile) {
-        // This could happen if the trigger failed. Redirecting to login is safer.
+        // This could happen if the DB trigger failed.
         redirect('/login');
     }
 
+    // The role check redirect is still necessary here.
     if (!profile.role) {
         redirect('/role-selection');
     }
 
     let upcomingAppointments: AppointmentWithOtherParty[] = [];
     if (profile.role === 'client') {
-        const { data } = await supabase
-            .from('appointments')
-            .select('*, professional:professional_id(full_name)')
-            .eq('client_id', session.user.id)
-            .eq('status', 'confirmed')
-            .gte('start_time', new Date().toISOString())
-            .order('start_time', { ascending: true })
-            .limit(3);
+        const { data } = await supabase.from('appointments').select('*, professional:professional_id(full_name)').eq('client_id', session.user.id).eq('status', 'confirmed').gte('start_time', new Date().toISOString()).order('start_time', { ascending: true }).limit(3);
         upcomingAppointments = data || [];
     } else {
-        const { data } = await supabase
-            .from('appointments')
-            .select('*, client:client_id(full_name)')
-            .eq('professional_id', session.user.id)
-            .eq('status', 'confirmed')
-            .gte('start_time', new Date().toISOString())
-            .order('start_time', { ascending: true })
-            .limit(3);
+        const { data } = await supabase.from('appointments').select('*, client:client_id(full_name)').eq('professional_id', session.user.id).eq('status', 'confirmed').gte('start_time', new Date().toISOString()).order('start_time', { ascending: true }).limit(3);
         upcomingAppointments = data || [];
     }
 
