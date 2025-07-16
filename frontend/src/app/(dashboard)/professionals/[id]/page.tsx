@@ -5,7 +5,6 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useEffect, useState, useMemo } from 'react';
 import { Award, Calendar, Clock, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { format, addDays, getDay, parseISO, set } from 'date-fns';
-import type { NextPage } from 'next';
 
 // Define types for our data
 type ProfessionalProfile = {
@@ -27,12 +26,9 @@ type Appointment = {
     start_time: string; // ISO string
 };
 
-// Define the props type for the page component
-interface ProfessionalProfilePageProps {
-    params: { id: string };
-}
-
-const ProfessionalProfilePage: NextPage<ProfessionalProfilePageProps> = ({ params }) => {
+// This is the corrected component definition.
+// We define the props type directly in the function signature.
+export default function ProfessionalProfilePage({ params }: { params: { id: string } }) {
     const supabase = createClientComponentClient();
     const professionalId = params.id;
 
@@ -197,5 +193,3 @@ const ProfessionalProfilePage: NextPage<ProfessionalProfilePageProps> = ({ param
         </>
     );
 }
-
-export default ProfessionalProfilePage;
