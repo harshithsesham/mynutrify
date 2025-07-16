@@ -1,4 +1,4 @@
-// app/role-selection/page.tsx
+// app/(auth)/role-selection/page.tsx
 'use client';
 
 import React, { useState } from 'react';
@@ -16,18 +16,19 @@ export default function RoleSelectionPage() {
         const { data: { user } } = await supabase.auth.getUser();
 
         if (user) {
-            // Update the user's profile with the selected role
+            // Correctly update the profile using the 'user_id' column
             const { error } = await supabase
                 .from('profiles')
                 .update({ role: role, updated_at: new Date().toISOString() })
-                .eq('id', user.id);
+                .eq('user_id', user.id);
 
-            if (!error) {
-                router.push('/dashboard');
-                router.refresh();
-            } else {
+            if (error) {
+                alert('Error saving your role: ' + error.message);
                 console.error('Error updating role:', error);
-                // Handle error state in UI
+            } else {
+                // On success, redirect to the dashboard
+                router.push('/dashboard');
+                router.refresh(); // Refresh to ensure new state is loaded
             }
         }
         setLoading(false);
