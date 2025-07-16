@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Calendar, Link as LinkIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
-// Define types to match the props we'll receive
+// Define types to match the props we'll receive from the server component
 type Profile = {
     full_name: string;
     role: string;

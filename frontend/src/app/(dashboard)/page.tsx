@@ -2,7 +2,7 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import DashboardClient from './DashboardClient'; // Import the client component
+import DashboardClient from './DashboardClient'; // Import the new client component
 
 export const dynamic = 'force-dynamic';
 
@@ -21,15 +21,13 @@ export default async function DashboardPage() {
         redirect('/login');
     }
 
-    // Correctly fetch the profile using the 'user_id' column
     const { data: profile } = await supabase
         .from('profiles')
         .select('role, full_name')
-        .eq('user_id', session.user.id) // This line is now fixed
+        .eq('user_id', session.user.id)
         .single();
 
     if (!profile) {
-        // This could happen if the DB trigger failed. Redirecting to login is safer.
         redirect('/login');
     }
 
@@ -42,10 +40,10 @@ export default async function DashboardPage() {
         const { data } = await supabase.from('appointments').select('*, professional:professional_id(full_name)').eq('client_id', session.user.id).eq('status', 'confirmed').gte('start_time', new Date().toISOString()).order('start_time', { ascending: true }).limit(3);
         upcomingAppointments = data || [];
     } else {
+        // Corrected the query for professionals to use user_id
         const { data } = await supabase.from('appointments').select('*, client:client_id(full_name)').eq('professional_id', session.user.id).eq('status', 'confirmed').gte('start_time', new Date().toISOString()).order('start_time', { ascending: true }).limit(3);
         upcomingAppointments = data || [];
     }
 
-    // Render the Client Component and pass the fetched data as props
     return <DashboardClient profile={profile} upcomingAppointments={upcomingAppointments} />;
 }
