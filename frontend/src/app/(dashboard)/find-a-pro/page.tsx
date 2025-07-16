@@ -1,7 +1,7 @@
-// app/dashboard/find-a-pro/page.tsx
+// app/(dashboard)/find-a-pro/page.tsx
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { Award, DollarSign, User, Link as LinkIcon } from 'lucide-react';
+import { Award, Link as LinkIcon } from 'lucide-react';
 import Link from 'next/link';
 
 // Define the type for a professional's profile for type safety
@@ -48,7 +48,7 @@ export default async function FindAProPage() {
                                     </div>
                                     {pro.hourly_rate && (
                                         <div className="flex items-center text-lg font-semibold bg-gray-700 px-3 py-1 rounded-full">
-                                            <DollarSign size={18} className="mr-1 text-green-400" />
+                                            <span className="font-bold text-green-400 mr-1">₹</span>
                                             {pro.hourly_rate}
                                             <span className="text-sm text-gray-400">/hr</span>
                                         </div>
