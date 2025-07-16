@@ -45,7 +45,7 @@ export default function DashboardClient({ profile, upcomingAppointments }: Dashb
                                         <p className="font-bold">{format(new Date(apt.start_time), 'MMMM do, yyyy')} at {format(new Date(apt.start_time), 'p')}</p>
                                         <p className="text-gray-300">With {profile.role === 'client' ? apt.professional?.full_name : apt.client?.full_name}</p>
                                     </div>
-                                    <Link href="/my-appointments" className="text-green-400 hover:text-green-300 font-semibold">
+                                    <Link href="/dashboard/my-appointments" className="text-green-400 hover:text-green-300 font-semibold">
                                         View
                                     </Link>
                                 </div>
@@ -63,16 +63,16 @@ export default function DashboardClient({ profile, upcomingAppointments }: Dashb
                         Quick Links
                     </h2>
                     <div className="space-y-4">
-                        <Link href="/my-appointments" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
+                        <Link href="/dashboard/my-appointments" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
                             View All Appointments
                         </Link>
                         {profile.role === 'client' && (
-                            <Link href="/find-a-pro" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
+                            <Link href="/dashboard/find-a-pro" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
                                 Find a New Professional
                             </Link>
                         )}
                         {(profile.role === 'nutritionist' || profile.role === 'trainer') && (
-                            <Link href="/settings/profile" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
+                            <Link href="/dashboard/settings/profile" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
                                 Edit Profile & Availability
                             </Link>
                         )}
