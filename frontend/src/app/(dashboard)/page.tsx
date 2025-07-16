@@ -21,9 +21,10 @@ export default async function DashboardPage() {
         redirect('/login');
     }
 
+    // Fetch the user's profile, including the profile's own `id` column.
     const { data: profile } = await supabase
         .from('profiles')
-        .select('role, full_name')
+        .select('id, role, full_name') // Added `id` to the selection
         .eq('user_id', session.user.id)
         .single();
 
@@ -40,8 +41,9 @@ export default async function DashboardPage() {
         const { data } = await supabase.from('appointments').select('*, professional:professional_id(full_name)').eq('client_id', session.user.id).eq('status', 'confirmed').gte('start_time', new Date().toISOString()).order('start_time', { ascending: true }).limit(3);
         upcomingAppointments = data || [];
     } else {
-        // This query is now corrected to use 'professional_id'
-        const { data } = await supabase.from('appointments').select('*, client:client_id(full_name)').eq('professional_id', session.user.id).eq('status', 'confirmed').gte('start_time', new Date().toISOString()).order('start_time', { ascending: true }).limit(3);
+        // This query is now corrected to use the profile's `id` (profile.id)
+        // to find appointments where the professional_id matches.
+        const { data } = await supabase.from('appointments').select('*, client:client_id(full_name)').eq('professional_id', profile.id).eq('status', 'confirmed').gte('start_time', new Date().toISOString()).order('start_time', { ascending: true }).limit(3);
         upcomingAppointments = data || [];
     }
 
