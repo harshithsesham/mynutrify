@@ -1,4 +1,4 @@
-// app/(dashboard)/settings/profile/page.tsx
+// app/dashboard/settings/profile/page.tsx
 'use client';
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -26,37 +26,25 @@ export default function ProfileSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [availability, setAvailability] = useState<Availability[]>([]);
-    const [profileId, setProfileId] = useState<string | null>(null); // Store the profile's own ID
+    const [profileId, setProfileId] = useState<string | null>(null);
 
-    // Fetch initial data on component mount
     const getProfileData = useCallback(async (userId: string) => {
         setLoading(true);
-
-        // First, get the profile using the user_id to find the correct row
-        const { data: profileData, error: profileError } = await supabase
+        const { data: profileData } = await supabase
             .from('profiles')
-            .select('id, full_name, bio, specialties, hourly_rate') // Select the profile's `id`
+            .select('id, full_name, bio, specialties, hourly_rate')
             .eq('user_id', userId)
             .single();
 
-        if (profileError) {
-            console.error('Error fetching profile:', profileError);
-            setLoading(false);
-            return;
+        if (profileData) {
+            setProfile(profileData);
+            setProfileId(profileData.id);
+            const { data: availabilityData } = await supabase
+                .from('availability')
+                .select('id, day_of_week, start_time, end_time')
+                .eq('professional_id', profileData.id);
+            setAvailability(availabilityData || []);
         }
-
-        setProfile(profileData);
-        setProfileId(profileData.id); // Save the profile's primary key ID
-
-        // Fetch availability using the profile's primary key ID
-        const { data: availabilityData, error: availabilityError } = await supabase
-            .from('availability')
-            .select('id, day_of_week, start_time, end_time')
-            .eq('professional_id', profileData.id); // Use the correct ID here
-
-        if (availabilityError) console.error('Error fetching availability:', availabilityError);
-        else setAvailability(availabilityData || []);
-
         setLoading(false);
     }, [supabase]);
 
@@ -64,7 +52,7 @@ export default function ProfileSettingsPage() {
         const getUserAndData = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-                getProfileData(user.id); // Pass the auth user ID
+                await getProfileData(user.id);
             }
         };
         getUserAndData();
@@ -92,7 +80,6 @@ export default function ProfileSettingsPage() {
         if (!profileId || !profile) return;
         setLoading(true);
 
-        // Update profile using its primary key `id`
         const { error: profileError } = await supabase
             .from('profiles')
             .update({ bio: profile.bio, specialties: profile.specialties, hourly_rate: profile.hourly_rate })
@@ -109,52 +96,59 @@ export default function ProfileSettingsPage() {
         setLoading(false);
     };
 
-    if (loading && !profile) return <div className="text-white text-center p-8">Loading...</div>;
+    if (loading && !profile) return <div className="text-center p-8 text-gray-500">Loading...</div>;
 
     return (
-        <div className="max-w-4xl mx-auto p-4 sm:p-8 text-white">
+        <div className="max-w-4xl mx-auto text-gray-800">
             <h1 className="text-4xl font-bold mb-8">Profile & Availability</h1>
-            <div className="bg-gray-800 p-6 rounded-2xl mb-8">
-                <h2 className="text-2xl font-semibold mb-4 text-green-400">Your Professional Profile</h2>
-                <div className="space-y-4">
+
+            <div className="bg-white border border-gray-200 p-8 rounded-2xl mb-8 shadow-sm">
+                <h2 className="text-2xl font-semibold mb-6 text-gray-800">Your Professional Profile</h2>
+                <div className="space-y-6">
                     <div>
-                        <label className="block text-gray-400 mb-1">Bio</label>
-                        <textarea value={profile?.bio || ''} onChange={(e) => handleProfileChange('bio', e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-400" rows={4} placeholder="Tell clients about yourself..."/>
+                        <label className="block text-gray-600 font-medium mb-2">Bio</label>
+                        <textarea value={profile?.bio || ''} onChange={(e) => handleProfileChange('bio', e.target.value)} className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800" rows={4} placeholder="Tell clients about yourself..."/>
                     </div>
                     <div>
-                        <label className="block text-gray-400 mb-1">Specialties (comma-separated)</label>
-                        <input type="text" value={profile?.specialties?.join(', ') || ''} onChange={(e) => handleProfileChange('specialties', e.target.value.split(',').map(s => s.trim()))} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-400" placeholder="e.g., Weight Loss, Sports Nutrition"/>
+                        <label className="block text-gray-600 font-medium mb-2">Specialties (comma-separated)</label>
+                        <input type="text" value={profile?.specialties?.join(', ') || ''} onChange={(e) => handleProfileChange('specialties', e.target.value.split(',').map(s => s.trim()))} className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800" placeholder="e.g., Weight Loss, Sports Nutrition"/>
                     </div>
                     <div>
-                        <label className="block text-gray-400 mb-1">Hourly Rate (₹)</label>
-                        <input type="number" value={profile?.hourly_rate || ''} onChange={(e) => handleProfileChange('hourly_rate', parseFloat(e.target.value) || null)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-400" placeholder="1500"/>
+                        <label className="block text-gray-600 font-medium mb-2">Hourly Rate (₹)</label>
+                        <input type="number" value={profile?.hourly_rate || ''} onChange={(e) => handleProfileChange('hourly_rate', parseFloat(e.target.value) || null)} className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800" placeholder="1500"/>
                     </div>
                 </div>
             </div>
-            <div className="bg-gray-800 p-6 rounded-2xl">
-                <h2 className="text-2xl font-semibold mb-4 text-green-400">Set Your Weekly Availability</h2>
+
+            <div className="bg-white border border-gray-200 p-8 rounded-2xl shadow-sm">
+                <h2 className="text-2xl font-semibold mb-6 text-gray-800">Set Your Weekly Availability</h2>
                 <div className="space-y-6">
                     {daysOfWeek.map((day, dayIndex) => (
-                        <div key={dayIndex}>
-                            <h3 className="text-lg font-medium text-white mb-2">{day}</h3>
+                        <div key={dayIndex} className="border-t border-gray-200 pt-4">
+                            <h3 className="text-lg font-medium text-gray-800 mb-3">{day}</h3>
                             {availability.filter(a => a.day_of_week === dayIndex).map((slot) => {
                                 const overallIndex = availability.findIndex(a => a === slot);
                                 return (
                                     <div key={overallIndex} className="flex items-center gap-4 mb-2">
-                                        <input type="time" value={slot.start_time} onChange={e => handleAvailabilityChange(overallIndex, 'start_time', e.target.value)} className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
-                                        <span>to</span>
-                                        <input type="time" value={slot.end_time} onChange={e => handleAvailabilityChange(overallIndex, 'end_time', e.target.value)} className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
-                                        <button onClick={() => removeAvailabilitySlot(overallIndex)} className="text-red-400 hover:text-red-300"><Trash2 size={20} /></button>
+                                        <input type="time" value={slot.start_time} onChange={e => handleAvailabilityChange(overallIndex, 'start_time', e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2" />
+                                        <span className="text-gray-500">to</span>
+                                        <input type="time" value={slot.end_time} onChange={e => handleAvailabilityChange(overallIndex, 'end_time', e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2" />
+                                        <button onClick={() => removeAvailabilitySlot(overallIndex)} className="text-red-500 hover:text-red-700"><Trash2 size={20} /></button>
                                     </div>
                                 );
                             })}
-                            <button onClick={() => addAvailabilitySlot(dayIndex)} className="flex items-center gap-2 text-green-400 hover:text-green-300 mt-2"><PlusCircle size={20} /> Add Time Slot</button>
+                            <button onClick={() => addAvailabilitySlot(dayIndex)} className="flex items-center gap-2 text-gray-800 hover:text-gray-600 font-semibold mt-2">
+                                <PlusCircle size={20} /> Add Time Slot
+                            </button>
                         </div>
                     ))}
                 </div>
             </div>
-            <div className="mt-8 text-right">
-                <button onClick={handleSaveChanges} disabled={loading} className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition duration-300 disabled:bg-gray-500">{loading ? 'Saving...' : 'Save Changes'}</button>
+
+            <div className="mt-8 flex justify-end">
+                <button onClick={handleSaveChanges} disabled={loading} className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 disabled:bg-gray-500">
+                    {loading ? 'Saving...' : 'Save Changes'}
+                </button>
             </div>
         </div>
     );

@@ -1,4 +1,4 @@
-// app/(dashboard)/DashboardClient.tsx
+// app/dashboard/DashboardClient.tsx
 'use client';
 
 import Link from 'next/link';
@@ -26,53 +26,53 @@ interface DashboardClientProps {
 // This is a Client Component responsible only for rendering the UI
 export default function DashboardClient({ profile, upcomingAppointments }: DashboardClientProps) {
     return (
-        <div className="max-w-7xl mx-auto p-4 sm:p-8 text-white">
+        <div className="max-w-7xl mx-auto text-gray-800">
             <h1 className="text-4xl font-bold">Welcome back, {profile.full_name}!</h1>
-            <p className="text-lg capitalize text-green-400 mb-8">{profile.role} Dashboard</p>
+            <p className="text-lg capitalize text-gray-600 mb-8">{profile.role} Dashboard</p>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Main Content: Upcoming Appointments */}
-                <div className="lg:col-span-2 bg-gray-800 p-6 rounded-2xl">
+                <div className="lg:col-span-2 bg-white border border-gray-200 p-6 rounded-2xl shadow-sm">
                     <h2 className="text-2xl font-semibold mb-4 flex items-center">
-                        <Calendar size={24} className="mr-3 text-green-400" />
+                        <Calendar size={24} className="mr-3 text-gray-500" />
                         Upcoming Appointments
                     </h2>
                     <div className="space-y-4">
                         {upcomingAppointments.length > 0 ? (
                             upcomingAppointments.map((apt) => (
-                                <div key={apt.id} className="bg-gray-700 p-4 rounded-lg flex justify-between items-center">
+                                <div key={apt.id} className="bg-gray-50 border border-gray-200 p-4 rounded-lg flex justify-between items-center">
                                     <div>
                                         <p className="font-bold">{format(new Date(apt.start_time), 'MMMM do, yyyy')} at {format(new Date(apt.start_time), 'p')}</p>
-                                        <p className="text-gray-300">With {profile.role === 'client' ? apt.professional?.full_name : apt.client?.full_name}</p>
+                                        <p className="text-gray-600">With {profile.role === 'client' ? apt.professional?.full_name : apt.client?.full_name}</p>
                                     </div>
-                                    <Link href="/dashboard/my-appointments" className="text-green-400 hover:text-green-300 font-semibold">
+                                    <Link href="/dashboard/my-appointments" className="text-gray-800 hover:underline font-semibold">
                                         View
                                     </Link>
                                 </div>
                             ))
                         ) : (
-                            <p className="text-gray-400">You have no upcoming appointments.</p>
+                            <p className="text-gray-500">You have no upcoming appointments.</p>
                         )}
                     </div>
                 </div>
 
                 {/* Sidebar: Quick Actions */}
-                <div className="lg:col-span-1 bg-gray-800 p-6 rounded-2xl">
+                <div className="lg:col-span-1 bg-white border border-gray-200 p-6 rounded-2xl shadow-sm">
                     <h2 className="text-2xl font-semibold mb-4 flex items-center">
-                        <LinkIcon size={24} className="mr-3 text-green-400" />
+                        <LinkIcon size={24} className="mr-3 text-gray-500" />
                         Quick Links
                     </h2>
                     <div className="space-y-4">
-                        <Link href="/dashboard/my-appointments" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
+                        <Link href="/dashboard/my-appointments" className="block bg-gray-100 hover:bg-gray-200 p-4 rounded-lg transition-colors font-medium">
                             View All Appointments
                         </Link>
                         {profile.role === 'client' && (
-                            <Link href="/dashboard/find-a-pro" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
+                            <Link href="/dashboard/find-a-pro" className="block bg-gray-100 hover:bg-gray-200 p-4 rounded-lg transition-colors font-medium">
                                 Find a New Professional
                             </Link>
                         )}
                         {(profile.role === 'nutritionist' || profile.role === 'trainer') && (
-                            <Link href="/dashboard/settings/profile" className="block bg-gray-700 hover:bg-gray-600 p-4 rounded-lg transition-colors">
+                            <Link href="/dashboard/settings/profile" className="block bg-gray-100 hover:bg-gray-200 p-4 rounded-lg transition-colors font-medium">
                                 Edit Profile & Availability
                             </Link>
                         )}
