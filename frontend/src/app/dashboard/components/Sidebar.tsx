@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { LayoutDashboard, Calendar, Search, Settings, LogOut, User } from 'lucide-react';
+import { LayoutDashboard, Calendar, Search, Settings, LogOut } from 'lucide-react';
 
 // Note: All hrefs now include the /dashboard/ prefix
 const navLinks = [

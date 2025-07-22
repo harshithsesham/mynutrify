@@ -31,7 +31,7 @@ export default async function FindAProPage() {
         <div className="max-w-7xl mx-auto text-gray-800">
             <div className="text-center mb-12">
                 <h1 className="text-5xl font-bold mb-2">Find Your Coach</h1>
-                <p className="text-lg text-gray-600">Get guidance from India's top certified fitness coaches.</p>
+                <p className="text-lg text-gray-600">Get guidance from top certified fitness coaches in India.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
