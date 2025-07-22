@@ -4,6 +4,7 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useEffect, useState } from 'react';
 import { Star, MessageSquare } from 'lucide-react';
+import { format } from 'date-fns';
 
 // Define types for our data
 type ProfessionalProfile = {
@@ -14,25 +15,55 @@ type ProfessionalProfile = {
     role: 'nutritionist' | 'trainer';
 };
 
+// New type for a review
+type Review = {
+    id: number;
+    rating: number;
+    content: string;
+    created_at: string;
+    client: {
+        full_name: string;
+    };
+};
+
 export default function ProfessionalProfileClient({ professionalId }: { professionalId: string }) {
     const supabase = createClientComponentClient();
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState<ProfessionalProfile | null>(null);
+    const [reviews, setReviews] = useState<Review[]>([]); // State for reviews
     const [activeTab, setActiveTab] = useState('reviews');
 
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
+
+            // Fetch profile data
             const { data: profileData } = await supabase
                 .from('profiles')
                 .select('id, full_name, bio, specialties, role')
                 .eq('id', professionalId)
                 .single();
             setProfile(profileData);
+
+            // Fetch reviews for this professional
+            const { data: reviewData } = await supabase
+                .from('reviews')
+                .select('id, rating, content, created_at, client:client_id(full_name)')
+                .eq('professional_id', professionalId);
+
+            // This is the corrected line. We use a more forceful type assertion
+            // to tell TypeScript that we know the data structure is correct.
+            setReviews((reviewData as unknown as Review[]) || []);
+
             setLoading(false);
         };
-        fetchData();
+        // Call the async function and handle potential errors
+        fetchData().catch(console.error);
     }, [supabase, professionalId]);
+
+    const averageRating = reviews.length > 0
+        ? (reviews.reduce((acc, review) => acc + review.rating, 0) / reviews.length).toFixed(1)
+        : 'N/A';
 
     if (loading) return <div className="text-center p-8 text-gray-500">Loading Profile...</div>;
     if (!profile) return <div className="text-center p-8 text-gray-500">Professional not found.</div>;
@@ -41,11 +72,9 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
         <div className="max-w-5xl mx-auto text-gray-800">
             {/* Profile Header */}
             <div className="bg-white border border-gray-200 rounded-2xl shadow-sm mb-8">
-                {/* Banner Image */}
                 <div className="h-40 bg-gray-200 rounded-t-2xl"></div>
                 <div className="p-6">
                     <div className="flex items-end -mt-20">
-                        {/* Profile Picture */}
                         <div className="w-32 h-32 rounded-full bg-gray-300 border-4 border-white flex-shrink-0"></div>
                         <div className="ml-6 flex-grow">
                             <h1 className="text-3xl font-bold">{profile.full_name}</h1>
@@ -88,7 +117,6 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
                 {/* Main Content */}
                 <div className="lg:col-span-2">
                     <div className="bg-white border border-gray-200 rounded-2xl">
-                        {/* Tabs */}
                         <div className="flex border-b border-gray-200">
                             <button onClick={() => setActiveTab('reviews')} className={`py-4 px-6 font-semibold ${activeTab === 'reviews' ? 'border-b-2 border-gray-800 text-gray-800' : 'text-gray-500'}`}>Reviews</button>
                             <button onClick={() => setActiveTab('about')} className={`py-4 px-6 font-semibold ${activeTab === 'about' ? 'border-b-2 border-gray-800 text-gray-800' : 'text-gray-500'}`}>About Me</button>
@@ -97,25 +125,35 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
                             {activeTab === 'reviews' && (
                                 <div>
                                     <div className="flex items-center mb-4">
-                                        <h3 className="text-xl font-bold">5/5</h3>
+                                        <h3 className="text-xl font-bold">{averageRating}/5</h3>
                                         <div className="flex items-center gap-1 text-yellow-400 ml-2">
-                                            <Star size={20} fill="currentColor" />
-                                            <Star size={20} fill="currentColor" />
-                                            <Star size={20} fill="currentColor" />
-                                            <Star size={20} fill="currentColor" />
-                                            <Star size={20} fill="currentColor" />
+                                            {[...Array(5)].map((_, i) => (
+                                                <Star key={i} size={20} fill={i < Math.round(parseFloat(averageRating)) ? 'currentColor' : 'none'} stroke="currentColor"/>
+                                            ))}
                                         </div>
                                     </div>
-                                    {/* Placeholder for a review */}
-                                    <div className="border-t border-gray-200 pt-4">
-                                        <div className="flex items-center mb-2">
-                                            <div className="w-10 h-10 rounded-full bg-gray-200 mr-4"></div>
-                                            <div>
-                                                <p className="font-semibold">Saurabh</p>
-                                                <p className="text-sm text-gray-500">29 May 2025</p>
-                                            </div>
-                                        </div>
-                                        <p className="text-gray-600">Aditya is a great coach. He has always been there for me. His expertise is immense.</p>
+                                    <div className="space-y-6">
+                                        {reviews.length > 0 ? (
+                                            reviews.map(review => (
+                                                <div key={review.id} className="border-t border-gray-200 pt-4">
+                                                    <div className="flex items-center mb-2">
+                                                        <div className="w-10 h-10 rounded-full bg-gray-200 mr-4"></div>
+                                                        <div>
+                                                            <p className="font-semibold">{review.client.full_name}</p>
+                                                            <p className="text-sm text-gray-500">{format(new Date(review.created_at), 'dd MMMM yyyy')}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 text-yellow-400 mb-2">
+                                                        {[...Array(5)].map((_, i) => (
+                                                            <Star key={i} size={16} fill={i < review.rating ? 'currentColor' : 'none'} stroke="currentColor"/>
+                                                        ))}
+                                                    </div>
+                                                    <p className="text-gray-600">{review.content}</p>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-gray-500">This coach has no reviews yet.</p>
+                                        )}
                                     </div>
                                 </div>
                             )}
