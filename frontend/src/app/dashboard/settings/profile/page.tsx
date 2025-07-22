@@ -86,12 +86,25 @@ export default function ProfileSettingsPage() {
             .eq('id', profileId);
         if (profileError) alert('Error saving profile: ' + profileError.message);
 
-        const availabilityToSave = availability.map(slot => ({ ...slot, professional_id: profileId }));
+        // This is the corrected logic. We remove the 'id' from each slot
+        // before sending it to the database.
+        const availabilityToSave = availability.map(({ id, ...slot }) => ({
+            ...slot,
+            professional_id: profileId,
+        }));
+
         const { error: availabilityError } = await supabase
             .from('availability')
             .upsert(availabilityToSave, { onConflict: 'professional_id,day_of_week,start_time' });
-        if (availabilityError) alert('Error saving availability: ' + availabilityError.message);
-        else alert('Changes saved successfully!');
+
+        if (availabilityError) {
+            alert('Error saving availability: ' + availabilityError.message);
+        } else {
+            alert('Changes saved successfully!');
+            // Refresh data from DB to get new IDs
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) await getProfileData(user.id);
+        }
 
         setLoading(false);
     };
@@ -129,7 +142,7 @@ export default function ProfileSettingsPage() {
                             {availability.filter(a => a.day_of_week === dayIndex).map((slot) => {
                                 const overallIndex = availability.findIndex(a => a === slot);
                                 return (
-                                    <div key={overallIndex} className="flex items-center gap-4 mb-2">
+                                    <div key={slot.id || `new-${overallIndex}`} className="flex items-center gap-4 mb-2">
                                         <input type="time" value={slot.start_time} onChange={e => handleAvailabilityChange(overallIndex, 'start_time', e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2" />
                                         <span className="text-gray-500">to</span>
                                         <input type="time" value={slot.end_time} onChange={e => handleAvailabilityChange(overallIndex, 'end_time', e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2" />
