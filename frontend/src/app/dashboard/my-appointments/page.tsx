@@ -1,10 +1,9 @@
-// app/(dashboard)/my-appointments/page.tsx
+// app/dashboard/my-appointments/page.tsx
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Calendar, User, Tag, IndianRupee } from 'lucide-react';
 import { format } from 'date-fns';
-import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +15,6 @@ export default async function MyAppointmentsPage() {
         redirect('/login');
     }
 
-    // First, get the current user's profile, including their profile ID
     const { data: profile } = await supabase
         .from('profiles')
         .select('id, role')
@@ -24,83 +22,76 @@ export default async function MyAppointmentsPage() {
         .single();
 
     if (!profile) {
-        return <div className="text-red-400 p-8">Could not find your profile.</div>;
+        return <div className="text-red-500 p-8">Could not find your profile.</div>;
     }
 
-    // Then, fetch appointments based on the user's role and profile ID
     let appointmentsQuery;
     if (profile.role === 'client') {
         appointmentsQuery = supabase
             .from('appointments')
             .select('*, professional:professional_id(full_name)')
-            .eq('client_id', profile.id) // Correctly use profile.id
-            .order('start_time', { ascending: true });
+            .eq('client_id', profile.id)
+            .order('start_time', { ascending: false });
     } else {
         appointmentsQuery = supabase
             .from('appointments')
             .select('*, client:client_id(full_name)')
-            .eq('professional_id', profile.id) // Correctly use profile.id
-            .order('start_time', { ascending: true });
+            .eq('professional_id', profile.id)
+            .order('start_time', { ascending: false });
     }
 
     const { data: appointments, error } = await appointmentsQuery;
 
     if (error) {
         console.error("Error fetching appointments:", error);
-        return <div className="text-red-400 p-8">Error loading appointments.</div>;
+        return <div className="text-red-500 p-8">Error loading appointments.</div>;
     }
 
     return (
-        <div className="max-w-5xl mx-auto p-4 sm:p-8 text-white">
+        <div className="max-w-5xl mx-auto text-gray-800">
             <h1 className="text-4xl font-bold mb-8">My Appointments</h1>
-
             <div className="space-y-6">
                 {appointments && appointments.length > 0 ? (
                     appointments.map(apt => {
                         const otherPersonName = profile.role === 'client' ? apt.professional.full_name : apt.client.full_name;
                         const appointmentDate = new Date(apt.start_time);
+                        const isPast = appointmentDate < new Date();
 
                         return (
-                            <div key={apt.id} className="bg-gray-800 rounded-2xl p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div key={apt.id} className={`bg-white border rounded-2xl p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${isPast ? 'border-gray-200 opacity-70' : 'border-gray-300 shadow-sm'}`}>
                                 <div className="flex-grow">
                                     <div className="flex items-center gap-3 mb-2">
-                                        <Calendar className="text-green-400" size={20} />
+                                        <Calendar className="text-gray-500" size={20} />
                                         <span className="font-bold text-xl">{format(appointmentDate, 'MMMM do, yyyy')}</span>
-                                        <span className="text-lg text-gray-300">at {format(appointmentDate, 'p')}</span>
+                                        <span className="text-lg text-gray-600">at {format(appointmentDate, 'p')}</span>
                                     </div>
-                                    <div className="flex items-center gap-3 text-gray-300 mb-2">
+                                    <div className="flex items-center gap-3 text-gray-600 mb-2">
                                         <User size={20} />
                                         <span>
-                      {profile.role === 'client' ? 'With' : 'With Client'}: <span className="font-semibold text-white">{otherPersonName}</span>
-                    </span>
+                                            {profile.role === 'client' ? 'With' : 'With Client'}: <span className="font-semibold text-gray-800">{otherPersonName}</span>
+                                        </span>
                                     </div>
-                                    <div className="flex items-center gap-3 text-gray-300">
+                                    <div className="flex items-center gap-3 text-gray-600">
                                         <IndianRupee size={20} />
                                         <span>
-                      Price: <span className="font-semibold text-white">₹{apt.price}</span>
-                                            {apt.is_first_consult && <span className="text-xs ml-2 bg-green-500/20 text-green-300 px-2 py-1 rounded-full">First Consult</span>}
-                    </span>
+                                            Price: <span className="font-semibold text-gray-800">₹{apt.price}</span>
+                                            {apt.is_first_consult && <span className="text-xs ml-2 bg-green-100 text-green-800 px-2 py-1 rounded-full">First Consult</span>}
+                                        </span>
                                     </div>
                                 </div>
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-                                    <div className="flex items-center gap-3 text-gray-300 bg-gray-700 px-4 py-2 rounded-lg justify-center">
-                                        <Tag size={20} />
-                                        <span className="capitalize font-semibold">{apt.status}</span>
+                                <div className="flex items-center gap-3">
+                                    <div className={`flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full ${apt.status === 'confirmed' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                                        <Tag size={16} />
+                                        <span className="capitalize">{apt.status}</span>
                                     </div>
-                                    {/* The cancel button would need to be moved to a client component to be interactive */}
-                                    {apt.status === 'confirmed' && (
-                                        <button className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 opacity-50 cursor-not-allowed">
-                                            Cancel
-                                        </button>
-                                    )}
                                 </div>
                             </div>
                         );
                     })
                 ) : (
-                    <div className="text-center text-gray-400 bg-gray-800 p-8 rounded-2xl">
+                    <div className="text-center text-gray-500 bg-gray-50 p-8 rounded-2xl border border-gray-200">
                         <h2 className="text-2xl font-bold mb-2">No Appointments Yet</h2>
-                        <p>You have no upcoming or past appointments.</p>
+                        <p>When you book an appointment, it will appear here.</p>
                     </div>
                 )}
             </div>

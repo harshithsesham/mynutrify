@@ -1,13 +1,12 @@
-// app/(dashboard)/professionals/[id]/page.tsx
+// app/dashboard/professionals/[id]/page.tsx
 import ProfessionalProfileClient from './ProfessionalProfileClient';
 import React from 'react';
 
-// Define the type for the page's props.
 type PageProps = {
-    params: Promise<{ id: string }>;
+    params: { id: string };
 };
 
+// This Server Component now correctly passes the params to the client component.
 export default async function Page({ params }: PageProps): Promise<React.ReactElement> {
-    const resolvedParams = await params;
-    return <ProfessionalProfileClient professionalId={resolvedParams.id} />;
+    return <ProfessionalProfileClient professionalId={params.id} />;
 }
