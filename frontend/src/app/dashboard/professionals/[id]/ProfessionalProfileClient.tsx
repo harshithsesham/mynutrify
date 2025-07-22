@@ -92,7 +92,8 @@ const BookingModal: FC<{
         const { count } = await supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('client_id', clientProfile.id);
         const isFirstConsult = count === 0;
 
-        // This is the corrected price calculation
+        // This is the corrected price calculation.
+        // It provides a default of 0 if hourly_rate is null.
         const price = isFirstConsult ? 0 : (professional.hourly_rate || 0);
 
         const [hour, minute] = selectedSlot.split(':').map(Number);
@@ -209,6 +210,12 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
                             <div className="ml-6 flex-grow">
                                 <h1 className="text-3xl font-bold">{profile.full_name}</h1>
                                 <p className="text-gray-600 capitalize">{profile.role}</p>
+                                {profile.hourly_rate !== null && (
+                                    <div className="flex items-center text-lg font-semibold text-gray-800 mt-2">
+                                        <span className="text-gray-600 font-bold mr-1">₹</span>
+                                        {profile.hourly_rate === 0 ? 'Free Consultation' : `${profile.hourly_rate} / hour`}
+                                    </div>
+                                )}
                             </div>
                             <div className="flex gap-4">
                                 <button className="bg-white border border-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-50">
