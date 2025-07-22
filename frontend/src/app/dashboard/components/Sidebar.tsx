@@ -7,9 +7,9 @@ import { LayoutDashboard, User, Calendar, Search, Settings, LogOut } from 'lucid
 
 const navLinks = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Find a Coach', href: '/find-a-pro', icon: Search },
-    { name: 'My Appointments', href: '/my-appointments', icon: Calendar },
-    { name: 'Settings', href: '/settings/profile', icon: Settings },
+    { name: 'Find a Coach', href: '/dashboard/find-a-pro', icon: Search },
+    { name: 'My Appointments', href: '/dashboard/my-appointments', icon: Calendar },
+    { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
 ];
 
 export default function Sidebar() {
