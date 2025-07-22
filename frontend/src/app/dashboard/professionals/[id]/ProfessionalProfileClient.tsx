@@ -91,7 +91,9 @@ const BookingModal: FC<{
 
         const { count } = await supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('client_id', clientProfile.id);
         const isFirstConsult = count === 0;
-        const price = isFirstConsult ? 0 : professional.hourly_rate;
+
+        // This is the corrected price calculation
+        const price = isFirstConsult ? 0 : (professional.hourly_rate || 0);
 
         const [hour, minute] = selectedSlot.split(':').map(Number);
         const appointmentStartTime = set(selectedDate, { hours: hour, minutes: minute, seconds: 0, milliseconds: 0 });
