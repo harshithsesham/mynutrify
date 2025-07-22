@@ -3,7 +3,7 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useEffect, useState } from 'react';
-import { Star, MessageSquare, Plus } from 'lucide-react';
+import { Star, MessageSquare } from 'lucide-react';
 
 // Define types for our data
 type ProfessionalProfile = {
@@ -34,8 +34,8 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
         fetchData();
     }, [supabase, professionalId]);
 
-    if (loading) return <div className="text-center p-8">Loading Profile...</div>;
-    if (!profile) return <div className="text-center p-8">Professional not found.</div>;
+    if (loading) return <div className="text-center p-8 text-gray-500">Loading Profile...</div>;
+    if (!profile) return <div className="text-center p-8 text-gray-500">Professional not found.</div>;
 
     return (
         <div className="max-w-5xl mx-auto text-gray-800">
@@ -121,7 +121,7 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
                             )}
                             {activeTab === 'about' && (
                                 <div>
-                                    <p className="text-gray-600 whitespace-pre-wrap">{profile.bio || "This coach hasn't written a bio yet."}</p>
+                                    <p className="text-gray-600 whitespace-pre-wrap">{profile.bio || "This coach has not written a bio yet."}</p>
                                 </div>
                             )}
                         </div>
