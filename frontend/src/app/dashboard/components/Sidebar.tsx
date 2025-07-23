@@ -65,7 +65,12 @@ export default function Sidebar() {
             <nav className="flex-grow">
                 <ul>
                     {navLinks.map((link) => {
-                        const isActive = pathname.startsWith(link.href);
+                        // This is the corrected logic. It checks for an exact match for the dashboard
+                        // and a partial match for all other pages.
+                        const isActive = link.href === '/dashboard'
+                            ? pathname === link.href
+                            : pathname.startsWith(link.href);
+
                         return (
                             <li key={link.name} className="mb-3">
                                 <Link
