@@ -13,7 +13,7 @@ type Profile = {
     specialties: string[] | null;
     interests: string[] | null;
     hourly_rate: number | null;
-    google_refresh_token: string | null;
+    google_refresh_token: string | null; // Added for Google integration
 };
 
 type Availability = {
