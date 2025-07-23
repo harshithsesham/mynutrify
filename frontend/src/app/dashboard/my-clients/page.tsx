@@ -28,7 +28,7 @@ export default function MyClientsPage() {
             .select('client:client_id(id, full_name)')
             .eq('coach_id', coachId);
 
-        // Safely map and type the enrolled clients
+        // Safely map and type the enrolled clients, filtering out any nulls
         const enrolled: Client[] = enrolledData
             ?.map(item => {
                 const client = item.client as unknown as Client;
@@ -37,7 +37,7 @@ export default function MyClientsPage() {
             .filter((client): client is Client => client !== null) || [];
         setEnrolledClients(enrolled);
 
-        // Fetch clients who have booked appointments but are not yet enrolled
+        // Fetch clients who have booked appointments
         const { data: appointmentData } = await supabase
             .from('appointments')
             .select('client:client_id(id, full_name)')
@@ -51,11 +51,11 @@ export default function MyClientsPage() {
             })
             .filter((client): client is Client => client !== null) || [];
 
-        // Filter out clients who are already enrolled
+        // Filter out clients who are already enrolled to get the true requests
         const requests = potentialClients.filter(p =>
             !enrolled.some(e => e.id === p.id)
         );
-        // Remove duplicates
+        // Remove duplicates to ensure a client only appears once in requests
         const uniqueRequests = Array.from(new Map(requests.map(item => [item.id, item])).values());
         setClientRequests(uniqueRequests);
 
