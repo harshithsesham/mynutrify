@@ -26,11 +26,11 @@ export default function MyClientsPage() {
     const fetchData = useCallback(async (coachId: string) => {
         setLoading(true);
 
-        const enrolledPromise = supabase.from('coach_clients').select('client:client_id(id, full_name)').eq('coach_id', coachId);
-        const appointmentsPromise = supabase.from('appointments').select('client:client_id(id, full_name)').eq('professional_id', coachId);
-        const dismissedPromise = supabase.from('dismissed_requests').select('client_id').eq('coach_id', coachId);
-
-        const [{data: enrolledData}, {data: appointmentData}, {data: dismissedData}] = await Promise.all([enrolledPromise, appointmentsPromise, dismissedPromise]);
+        // 1. Fetch all clients officially enrolled with the coach
+        const { data: enrolledData } = await supabase
+            .from('coach_clients')
+            .select('client:client_id(id, full_name)')
+            .eq('coach_id', coachId);
 
         // Safely map and type the enrolled clients, filtering out any nulls or invalid entries
         const enrolled: Client[] = enrolledData
@@ -41,18 +41,24 @@ export default function MyClientsPage() {
             .filter((client): client is Client => client !== null) || [];
         setEnrolledClients(enrolled);
 
-        const potentialClients: Client[] = appointmentData
+        // 2. Fetch all clients who have unhandled appointment requests
+        const { data: requestData } = await supabase
+            .from('appointments')
+            .select('client:client_id(id, full_name)')
+            .eq('professional_id', coachId)
+            .eq('is_request_handled', false); // Only get unhandled requests
+
+        const potentialClients: Client[] = requestData
             ?.map(item => {
                 const client = item.client as unknown as Client;
                 return client && client.id && client.full_name ? client : null;
             })
             .filter((client): client is Client => client !== null) || [];
 
-        const dismissedClientIds = new Set(dismissedData?.map(item => item.client_id) || []);
+        const enrolledClientIds = new Set(enrolled.map(c => c.id));
 
-        const requests = potentialClients.filter(p =>
-            !enrolled.some(e => e.id === p.id) && !dismissedClientIds.has(p.id)
-        );
+        // 3. Filter out clients who are already enrolled
+        const requests = potentialClients.filter(p => !enrolledClientIds.has(p.id));
 
         const uniqueRequests = Array.from(new Map(requests.map(item => [item.id, item])).values());
         setClientRequests(uniqueRequests);
@@ -89,35 +95,33 @@ export default function MyClientsPage() {
     const handleEnrollClient = async (clientId: string) => {
         if (!coachProfileId) return;
         setOpenDropdownId(null);
-        const { error } = await supabase.from('coach_clients').insert({ coach_id: coachProfileId, client_id: clientId });
-        if (error) alert("Failed to enroll client: " + error.message);
-        else {
-            alert("Client enrolled successfully!");
-            await fetchData(coachProfileId);
-        }
+        await supabase.from('coach_clients').insert({ coach_id: coachProfileId, client_id: clientId });
+        await handleRemoveRequest(clientId, false); // Also mark requests as handled
+        alert("Client enrolled successfully!");
+        await fetchData(coachProfileId);
     };
 
     const handleRemoveClient = async (clientId: string) => {
-        if (!coachProfileId || !window.confirm("Are you sure you want to remove this client? This will not delete their appointments.")) return;
+        if (!coachProfileId || !window.confirm("Are you sure you want to remove this client?")) return;
         setOpenDropdownId(null);
-        const { error } = await supabase.from('coach_clients').delete().match({ coach_id: coachProfileId, client_id: clientId });
-        if (error) alert("Failed to remove client: " + error.message);
-        else {
-            alert("Client removed successfully.");
-            await fetchData(coachProfileId);
-        }
+        await supabase.from('coach_clients').delete().match({ coach_id: coachProfileId, client_id: clientId });
+        alert("Client removed successfully.");
+        await fetchData(coachProfileId);
     };
 
-    const handleDismissRequest = async (clientId: string) => {
+    const handleRemoveRequest = async (clientId: string, showAlert = true) => {
         if (!coachProfileId) return;
         setOpenDropdownId(null);
-        const { error } = await supabase.from('dismissed_requests').insert({ coach_id: coachProfileId, client_id: clientId });
-        if (error) {
-            alert("Failed to dismiss request: " + error.message);
-        } else {
-            alert("Request dismissed.");
-            // This is the fix: update the local state to remove the client from the requests list
-            setClientRequests(prevRequests => prevRequests.filter(req => req.id !== clientId));
+        // Mark all of this client's appointments with this coach as handled
+        const { error } = await supabase
+            .from('appointments')
+            .update({ is_request_handled: true })
+            .match({ professional_id: coachProfileId, client_id: clientId });
+
+        if (error) alert("Failed to remove request: " + error.message);
+        else if (showAlert) {
+            alert("Request removed.");
+            await fetchData(coachProfileId);
         }
     };
 
@@ -157,8 +161,8 @@ export default function MyClientsPage() {
                                             <button onClick={() => handleEnrollClient(client.id)} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                                 <UserPlus size={16} /> Enroll Client
                                             </button>
-                                            <button onClick={() => handleDismissRequest(client.id)} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                                <XCircle size={16} /> Dismiss Request
+                                            <button onClick={() => handleRemoveRequest(client.id)} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                                <XCircle size={16} /> Remove Request
                                             </button>
                                         </>
                                     ) : (
