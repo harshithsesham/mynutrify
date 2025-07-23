@@ -4,20 +4,54 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { LayoutDashboard, Calendar, Search, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Calendar, Search, Settings, LogOut, Users, FileText } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-// Note: All hrefs now include the /dashboard/ prefix
-const navLinks = [
+const baseNavLinks = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Find a Coach', href: '/dashboard/find-a-pro', icon: Search },
     { name: 'My Appointments', href: '/dashboard/my-appointments', icon: Calendar },
-    { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
 ];
+
+const clientLinks = [
+    { name: 'My Plans', href: '/dashboard/my-plans', icon: FileText },
+];
+
+const coachLinks = [
+    { name: 'My Clients', href: '/dashboard/my-clients', icon: Users },
+];
+
+const settingsLink = { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings };
 
 export default function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
     const supabase = createClientComponentClient();
+    const [userRole, setUserRole] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchUserRole = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('user_id', user.id)
+                    .single();
+                if (profile) {
+                    setUserRole(profile.role);
+                }
+            }
+        };
+        fetchUserRole();
+    }, [supabase]);
+
+    const navLinks = [
+        ...baseNavLinks,
+        ...(userRole === 'client' ? clientLinks : []),
+        ...(userRole === 'nutritionist' || userRole === 'trainer' ? coachLinks : []),
+        settingsLink,
+    ];
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
@@ -31,7 +65,7 @@ export default function Sidebar() {
             <nav className="flex-grow">
                 <ul>
                     {navLinks.map((link) => {
-                        const isActive = pathname === link.href;
+                        const isActive = pathname.startsWith(link.href);
                         return (
                             <li key={link.name} className="mb-3">
                                 <Link
