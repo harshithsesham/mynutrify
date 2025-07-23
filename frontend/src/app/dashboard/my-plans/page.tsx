@@ -15,7 +15,7 @@ type NutritionPlan = {
     created_at: string;
     creator: {
         full_name: string;
-    }[] | null; // Supabase can return relationships as an array
+    } | null; // A single object or null
 };
 
 export default async function MyPlansPage() {
@@ -33,8 +33,7 @@ export default async function MyPlansPage() {
         .eq('user_id', session.user.id)
         .single();
 
-    if (!clientProfile || clientProfile.role !== 'client') {
-        // This page is for clients only
+    if (!clientProfile) {
         return redirect('/dashboard');
     }
 
@@ -52,7 +51,7 @@ export default async function MyPlansPage() {
         .eq('assigned_to_id', clientProfile.id)
         .order('created_at', { ascending: false });
 
-    const plans = data as NutritionPlan[] | null;
+    const plans = data as unknown as NutritionPlan[] | null;
 
     if (error) {
         console.error("Error fetching plans:", error);
@@ -69,27 +68,23 @@ export default async function MyPlansPage() {
             </div>
             <div className="space-y-6">
                 {plans && plans.length > 0 ? (
-                    plans.map((plan) => {
-                        // Safely access the creator's name from the array
-                        const creatorName = plan.creator && plan.creator.length > 0 ? plan.creator[0].full_name : 'Unknown';
-                        return (
-                            <Link
-                                href={`/dashboard/my-plans/${plan.id}`}
-                                key={plan.id}
-                                className="block bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <FileText size={32} className="text-gray-400" />
-                                    <div>
-                                        <p className="font-semibold text-lg">{plan.title}</p>
-                                        <p className="text-sm text-gray-500">
-                                            Created by {creatorName} on {format(new Date(plan.created_at), 'dd MMM yyyy')}
-                                        </p>
-                                    </div>
+                    plans.map((plan) => (
+                        <Link
+                            href={`/dashboard/my-plans/${plan.id}`}
+                            key={plan.id}
+                            className="block bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                        >
+                            <div className="flex items-center gap-4">
+                                <FileText size={32} className="text-gray-400" />
+                                <div>
+                                    <p className="font-semibold text-lg">{plan.title}</p>
+                                    <p className="text-sm text-gray-500">
+                                        Created by {plan.creator?.full_name || 'Unknown'} on {format(new Date(plan.created_at), 'dd MMM yyyy')}
+                                    </p>
                                 </div>
-                            </Link>
-                        );
-                    })
+                            </div>
+                        </Link>
+                    ))
                 ) : (
                     <div className="text-center text-gray-500 py-12 bg-gray-50 rounded-2xl border border-gray-200">
                         <h2 className="text-2xl font-bold mb-2">No Plans Yet</h2>
