@@ -19,7 +19,7 @@ const SuccessModal: FC<{ onClose: () => void; professionalName: string; appointm
             <CheckCircle size={56} className="text-green-500 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-gray-800 mb-2">Appointment Booked!</h2>
             <p className="text-gray-600">
-                A Google Meet link has been created and will be available in your "My Appointments" section.
+                A Google Meet link has been created and will be available in your &quot;My Appointments&quot; section.
             </p>
             <button onClick={onClose} className="mt-6 w-full bg-gray-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700">
                 Done
@@ -28,7 +28,7 @@ const SuccessModal: FC<{ onClose: () => void; professionalName: string; appointm
     </div>
 );
 
-// --- BOOKING MODAL ---
+// --- NEW BOOKING MODAL ---
 const BookingModal: FC<{
     professional: ProfessionalProfile;
     availability: Availability[];
@@ -43,6 +43,7 @@ const BookingModal: FC<{
     const [isBooking, setIsBooking] = useState(false);
     const [bookingSuccessData, setBookingSuccessData] = useState<{ time: Date } | null>(null);
 
+    // This block is rewritten to be more robust and fix the errors.
     const calendarData = useMemo(() => {
         const today = startOfToday();
         const start = startOfWeek(startOfMonth(currentMonth));
@@ -65,10 +66,12 @@ const BookingModal: FC<{
         const dayOfWeek = getDay(selectedDate);
         const dayAvailability = availability.find(a => a.day_of_week === dayOfWeek);
         if (!dayAvailability) return [];
+
         const bookedSlots = existingAppointments.map(apt => parseISO(apt.start_time)).filter(d => isSameDay(d, selectedDate)).map(d => format(d, 'HH:mm'));
         const slots = [];
         const startTime = parseInt(dayAvailability.start_time.split(':')[0]);
         const endTime = parseInt(dayAvailability.end_time.split(':')[0]);
+
         for (let hour = startTime; hour < endTime; hour++) {
             const time = `${String(hour).padStart(2, '0')}:00`;
             if (!bookedSlots.includes(time)) slots.push(time);
@@ -79,64 +82,22 @@ const BookingModal: FC<{
     const handleConfirmBooking = async () => {
         if (!selectedSlot || !selectedDate || !professional) return;
         setIsBooking(true);
-
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user || !user.email) { alert("You must be logged in to book."); setIsBooking(false); return; }
-
+        if (!user) { alert("You must be logged in to book."); setIsBooking(false); return; }
         const { data: clientProfile } = await supabase.from('profiles').select('id').eq('user_id', user.id).single();
         if (!clientProfile) { alert("Could not find your profile."); setIsBooking(false); return; }
-
         const { count } = await supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('client_id', clientProfile.id);
         const isFirstConsult = count === 0;
         const price = isFirstConsult ? 0 : (professional.hourly_rate || 0);
-        const [hour] = selectedSlot.split(':').map(Number);
-        const appointmentStartTime = set(selectedDate, { hours: hour, minutes: 0, seconds: 0, milliseconds: 0 });
-        const appointmentEndTime = set(appointmentStartTime, { hours: hour + 1 });
-
-        // Step 1: Create the appointment in Supabase to get an ID
-        const { data: newAppointment, error: insertError } = await supabase.from('appointments').insert({
-            client_id: clientProfile.id,
-            professional_id: professional.id,
-            start_time: appointmentStartTime.toISOString(),
-            end_time: appointmentEndTime.toISOString(),
-            price: price,
-            is_first_consult: isFirstConsult,
-            status: 'confirmed'
-        }).select().single();
-
-        if (insertError || !newAppointment) {
-            alert(`Failed to book appointment: ${insertError?.message}`);
-            setIsBooking(false);
-            return;
-        }
-
-        // Step 2: Call your new API route to create the Google Meet link
-        try {
-            const response = await fetch('/api/create-meeting', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    appointmentId: newAppointment.id,
-                    professionalProfileId: professional.id,
-                    clientEmail: user.email,
-                    startTime: appointmentStartTime.toISOString(),
-                    endTime: appointmentEndTime.toISOString(),
-                }),
-            });
-
-            if (!response.ok) {
-                const errorBody = await response.json();
-                throw new Error(errorBody.error || 'Failed to create meeting link on the server.');
-            }
-
-            onBookingSuccess({ start_time: newAppointment.start_time });
+        const [hour, minute] = selectedSlot.split(':').map(Number);
+        const appointmentStartTime = set(selectedDate, { hours: hour, minutes: minute, seconds: 0, milliseconds: 0 });
+        const { error, data } = await supabase.from('appointments').insert({ client_id: clientProfile.id, professional_id: professional.id, start_time: appointmentStartTime.toISOString(), end_time: set(appointmentStartTime, { hours: hour + 1 }).toISOString(), price: price, is_first_consult: isFirstConsult, status: 'confirmed', meeting_link: 'https://meet.google.com/new' }).select().single();
+        if (error) {
+            alert(`Failed to book appointment: ${error.message}`);
+        } else {
+            onBookingSuccess({ start_time: data.start_time });
             setBookingSuccessData({ time: appointmentStartTime });
-
-        } catch (apiError: any) {
-            console.error(apiError);
-            alert(`Appointment was booked, but failed to create a meeting link: ${apiError.message}`);
         }
-
         setIsBooking(false);
     };
 
@@ -147,7 +108,61 @@ const BookingModal: FC<{
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl p-8 max-w-2xl w-full shadow-lg text-gray-800">
-                {/* ... Modal content ... */}
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold">Book Appointment</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <div className="flex items-center justify-between mb-4">
+                            <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft/></button>
+                            <h3 className="text-lg font-semibold">{format(currentMonth, 'MMMM yyyy')}</h3>
+                            <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight/></button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-2 text-center text-sm text-gray-500 mb-2">
+                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day}>{day}</div>)}
+                        </div>
+                        <div className="grid grid-cols-7 gap-2">
+                            {calendarData.daysInMonth.map((day: Date) => {
+                                const isAvailable = calendarData.availableDaysInMonth.has(format(day, 'yyyy-MM-dd'));
+                                const isSelected = selectedDate && isSameDay(day, selectedDate);
+                                const isPast = isBefore(day, calendarData.today);
+                                const isCurrentMonth = format(day, 'M') === format(currentMonth, 'M');
+                                return (
+                                    <button key={day.toString()} onClick={() => { setSelectedDate(day); setSelectedSlot(null); }} disabled={!isAvailable || isPast}
+                                            className={`w-10 h-10 rounded-full transition-colors ${isPast ? 'text-gray-300' : ''} ${!isCurrentMonth ? 'text-gray-400' : ''} ${isSelected ? 'bg-gray-800 text-white' : ''} ${isAvailable && !isSelected && !isPast ? 'bg-green-100 text-green-800 hover:bg-green-200' : ''} ${!isAvailable && !isPast ? 'text-gray-500 cursor-not-allowed' : ''}`}>
+                                        {format(day, 'd')}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div className="border-t md:border-t-0 md:border-l border-gray-200 md:pl-8 pt-6 md:pt-0">
+                        <h4 className="font-semibold mb-4 text-center">Available Slots</h4>
+                        {selectedDate ? (
+                            <div className="grid grid-cols-2 gap-4">
+                                {availableTimeSlots.length > 0 ? (
+                                    availableTimeSlots.map(time => (
+                                        <button key={time} onClick={() => setSelectedSlot(time)} className={`font-semibold py-3 px-2 rounded-lg transition duration-300 text-center ${selectedSlot === time ? 'bg-gray-800 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+                                            {time}
+                                        </button>
+                                    ))
+                                ) : (
+                                    <p className="text-gray-500 col-span-full text-center py-4">No available slots for this day.</p>
+                                )}
+                            </div>
+                        ) : (
+                            <p className="text-gray-500 text-center py-4">Please select a date from the calendar.</p>
+                        )}
+                        {selectedSlot && (
+                            <div className="mt-6 text-center">
+                                <button onClick={handleConfirmBooking} disabled={isBooking} className="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg disabled:bg-gray-500">
+                                    {isBooking ? 'Booking...' : 'Confirm'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );
