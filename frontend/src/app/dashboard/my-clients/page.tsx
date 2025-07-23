@@ -2,9 +2,9 @@
 'use client';
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { UserCircle, UserPlus, UserMinus } from 'lucide-react';
+import { UserCircle, MoreVertical, UserPlus, UserMinus, XCircle } from 'lucide-react';
 
 // --- TYPE DEFINITIONS ---
 type Client = {
@@ -20,42 +20,40 @@ export default function MyClientsPage() {
     const [enrolledClients, setEnrolledClients] = useState<Client[]>([]);
     const [clientRequests, setClientRequests] = useState<Client[]>([]);
     const [activeTab, setActiveTab] = useState<'clients' | 'requests'>('clients');
+    const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     const fetchData = useCallback(async (coachId: string) => {
-        // Fetch enrolled clients from the coach_clients table
-        const { data: enrolledData } = await supabase
-            .from('coach_clients')
-            .select('client:client_id(id, full_name)')
-            .eq('coach_id', coachId);
+        setLoading(true);
 
-        // Safely map and type the enrolled clients, filtering out any nulls
+        const enrolledPromise = supabase.from('coach_clients').select('client:client_id(id, full_name)').eq('coach_id', coachId);
+        const appointmentsPromise = supabase.from('appointments').select('client:client_id(id, full_name)').eq('professional_id', coachId);
+        const dismissedPromise = supabase.from('dismissed_requests').select('client_id').eq('coach_id', coachId);
+
+        const [{data: enrolledData}, {data: appointmentData}, {data: dismissedData}] = await Promise.all([enrolledPromise, appointmentsPromise, dismissedPromise]);
+
+        // Safely map and type the enrolled clients, filtering out any nulls or invalid entries
         const enrolled: Client[] = enrolledData
             ?.map(item => {
                 const client = item.client as unknown as Client;
-                return client ? { id: client.id, full_name: client.full_name } : null;
+                return client && client.id && client.full_name ? client : null;
             })
             .filter((client): client is Client => client !== null) || [];
         setEnrolledClients(enrolled);
 
-        // Fetch clients who have booked appointments
-        const { data: appointmentData } = await supabase
-            .from('appointments')
-            .select('client:client_id(id, full_name)')
-            .eq('professional_id', coachId);
-
-        // Safely map and type the potential clients
         const potentialClients: Client[] = appointmentData
             ?.map(item => {
                 const client = item.client as unknown as Client;
-                return client ? { id: client.id, full_name: client.full_name } : null;
+                return client && client.id && client.full_name ? client : null;
             })
             .filter((client): client is Client => client !== null) || [];
 
-        // Filter out clients who are already enrolled to get the true requests
+        const dismissedClientIds = new Set(dismissedData?.map(item => item.client_id) || []);
+
         const requests = potentialClients.filter(p =>
-            !enrolled.some(e => e.id === p.id)
+            !enrolled.some(e => e.id === p.id) && !dismissedClientIds.has(p.id)
         );
-        // Remove duplicates to ensure a client only appears once in requests
+
         const uniqueRequests = Array.from(new Map(requests.map(item => [item.id, item])).values());
         setClientRequests(uniqueRequests);
 
@@ -66,57 +64,63 @@ export default function MyClientsPage() {
         const getCoachProfile = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('id')
-                    .eq('user_id', user.id)
-                    .single();
+                const { data: profile } = await supabase.from('profiles').select('id').eq('user_id', user.id).single();
                 if (profile) {
                     setCoachProfileId(profile.id);
                     await fetchData(profile.id);
-                } else {
-                    setLoading(false);
-                }
-            } else {
-                setLoading(false);
-            }
+                } else setLoading(false);
+            } else setLoading(false);
         };
         getCoachProfile();
     }, [supabase, fetchData]);
 
-    // --- ENROLL / REMOVE LOGIC ---
+    // --- CLICK OUTSIDE HOOK for dropdown ---
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setOpenDropdownId(null);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [dropdownRef]);
+
+    // --- CLIENT MANAGEMENT LOGIC ---
     const handleEnrollClient = async (clientId: string) => {
         if (!coachProfileId) return;
-        const { error } = await supabase
-            .from('coach_clients')
-            .insert({ coach_id: coachProfileId, client_id: clientId });
-
-        if (error) {
-            alert("Failed to enroll client: " + error.message);
-        } else {
+        setOpenDropdownId(null);
+        const { error } = await supabase.from('coach_clients').insert({ coach_id: coachProfileId, client_id: clientId });
+        if (error) alert("Failed to enroll client: " + error.message);
+        else {
             alert("Client enrolled successfully!");
-            await fetchData(coachProfileId); // Refresh the lists
+            await fetchData(coachProfileId);
         }
     };
 
     const handleRemoveClient = async (clientId: string) => {
-        if (!coachProfileId || !window.confirm("Are you sure you want to remove this client?")) return;
-
-        const { error } = await supabase
-            .from('coach_clients')
-            .delete()
-            .match({ coach_id: coachProfileId, client_id: clientId });
-
-        if (error) {
-            alert("Failed to remove client: " + error.message);
-        } else {
+        if (!coachProfileId || !window.confirm("Are you sure you want to remove this client? This will not delete their appointments.")) return;
+        setOpenDropdownId(null);
+        const { error } = await supabase.from('coach_clients').delete().match({ coach_id: coachProfileId, client_id: clientId });
+        if (error) alert("Failed to remove client: " + error.message);
+        else {
             alert("Client removed successfully.");
-            await fetchData(coachProfileId); // Refresh the lists
+            await fetchData(coachProfileId);
+        }
+    };
+
+    const handleDismissRequest = async (clientId: string) => {
+        if (!coachProfileId) return;
+        setOpenDropdownId(null);
+        const { error } = await supabase.from('dismissed_requests').insert({ coach_id: coachProfileId, client_id: clientId });
+        if (error) alert("Failed to dismiss request: " + error.message);
+        else {
+            alert("Request dismissed.");
+            await fetchData(coachProfileId);
         }
     };
 
     const renderClientList = (clients: Client[], isRequest: boolean) => {
-        if (loading) return <p className="text-gray-500">Loading...</p>;
+        if (loading) return <p className="text-gray-500 p-4 text-center">Loading...</p>;
         if (clients.length === 0) {
             return (
                 <div className="text-center text-gray-500 py-12">
@@ -133,22 +137,36 @@ export default function MyClientsPage() {
         return (
             <div className="space-y-4">
                 {clients.map(client => (
-                    <div key={client.id} className="flex items-center justify-between p-4 border-b border-gray-200">
+                    <div key={client.id} className="flex items-center justify-between p-4 border-b border-gray-200 last:border-b-0">
                         <Link href={`/dashboard/my-clients/${client.id}/plans`} className="flex items-center gap-4 group">
                             <UserCircle size={40} className="text-gray-400" />
                             <div>
                                 <p className="font-semibold text-lg group-hover:underline">{client.full_name}</p>
                             </div>
                         </Link>
-                        {isRequest ? (
-                            <button onClick={() => handleEnrollClient(client.id)} className="flex items-center gap-2 bg-green-100 text-green-800 font-semibold py-2 px-4 rounded-lg hover:bg-green-200">
-                                <UserPlus size={18} /> Enroll
+                        <div className="relative" ref={openDropdownId === client.id ? dropdownRef : null}>
+                            <button onClick={() => setOpenDropdownId(openDropdownId === client.id ? null : client.id)} className="p-2 rounded-full hover:bg-gray-100">
+                                <MoreVertical size={20} />
                             </button>
-                        ) : (
-                            <button onClick={() => handleRemoveClient(client.id)} className="flex items-center gap-2 bg-red-100 text-red-800 font-semibold py-2 px-4 rounded-lg hover:bg-red-200">
-                                <UserMinus size={18} /> Remove
-                            </button>
-                        )}
+                            {openDropdownId === client.id && (
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                                    {isRequest ? (
+                                        <>
+                                            <button onClick={() => handleEnrollClient(client.id)} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                                <UserPlus size={16} /> Enroll Client
+                                            </button>
+                                            <button onClick={() => handleDismissRequest(client.id)} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                                <XCircle size={16} /> Dismiss Request
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <button onClick={() => handleRemoveClient(client.id)} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                                            <UserMinus size={16} /> Remove Client
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 ))}
             </div>
@@ -167,7 +185,7 @@ export default function MyClientsPage() {
                         Requests ({clientRequests.length})
                     </button>
                 </div>
-                <div className="p-8">
+                <div className="p-4">
                     {activeTab === 'clients' ? renderClientList(enrolledClients, false) : renderClientList(clientRequests, true)}
                 </div>
             </div>
