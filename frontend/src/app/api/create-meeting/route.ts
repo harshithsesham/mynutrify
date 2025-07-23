@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ meetingLink });
 
     } catch (err) {
+        // This is the corrected error handling block
         const error = err as Error;
         console.error('Error creating Google Meet link:', error);
         return NextResponse.json(
