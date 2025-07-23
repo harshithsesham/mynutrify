@@ -1,6 +1,7 @@
 // app/dashboard/components/Header.tsx
 'use client';
-import { Bell, UserCircle } from 'lucide-react';
+
+import { Bell, UserCircle, Menu } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useEffect, useState } from 'react';
 
@@ -9,7 +10,11 @@ type Profile = {
     role: string;
 };
 
-export default function Header() {
+interface HeaderProps {
+    onMenuClick: () => void;
+}
+
+export default function Header({ onMenuClick }: HeaderProps) {
     const supabase = createClientComponentClient();
     const [profile, setProfile] = useState<Profile | null>(null);
 
@@ -31,7 +36,15 @@ export default function Header() {
     }, [supabase]);
 
     return (
-        <header className="bg-white border-b border-gray-200 h-20 flex items-center justify-end px-8">
+        <header className="bg-white border-b border-gray-200 h-20 flex items-center justify-between md:justify-end px-8">
+            {/* Hamburger Menu Button - Only visible on mobile */}
+            <button
+                onClick={onMenuClick}
+                className="md:hidden text-gray-500 hover:text-gray-800"
+            >
+                <Menu size={28} />
+            </button>
+
             <div className="flex items-center gap-6">
                 <button className="text-gray-500 hover:text-gray-800">
                     <Bell size={24} />
