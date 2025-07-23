@@ -3,8 +3,8 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useEffect, useState, useMemo, FC } from 'react';
-import { Star, MessageSquare, Calendar, Clock, ChevronLeft, ChevronRight, X, CheckCircle } from 'lucide-react';
-import { format, addMonths, subMonths, getDay, parseISO, set, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isBefore, startOfToday, getDaysInMonth, startOfWeek, endOfWeek } from 'date-fns';
+import { Star, MessageSquare, Clock, ChevronLeft, ChevronRight, X, CheckCircle } from 'lucide-react';
+import { format, addMonths, subMonths, getDay, parseISO, set, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isBefore, startOfToday, startOfWeek, endOfWeek } from 'date-fns';
 
 // --- TYPE DEFINITIONS ---
 type ProfessionalProfile = { id: string; full_name: string; bio: string | null; specialties: string[] | null; role: 'nutritionist' | 'trainer'; interests: string[] | null; hourly_rate: number | null; };
@@ -43,10 +43,13 @@ const BookingModal: FC<{
     const [isBooking, setIsBooking] = useState(false);
     const [bookingSuccessData, setBookingSuccessData] = useState<{ time: Date } | null>(null);
 
-    const daysInMonth = eachDayOfInterval({ start: startOfWeek(startOfMonth(currentMonth)), end: endOfWeek(endOfMonth(currentMonth)) });
-    const today = startOfToday();
+    // This block is rewritten to be more robust and fix the errors.
+    const calendarData = useMemo(() => {
+        const today = startOfToday();
+        const start = startOfWeek(startOfMonth(currentMonth));
+        const end = endOfWeek(endOfMonth(currentMonth));
+        const daysInMonth = eachDayOfInterval({ start, end });
 
-    const availableDaysInMonth = useMemo(() => {
         const availableDays = new Set<string>();
         availability.forEach(avail => {
             daysInMonth.forEach(day => {
@@ -55,8 +58,8 @@ const BookingModal: FC<{
                 }
             });
         });
-        return availableDays;
-    }, [currentMonth, availability, daysInMonth, today]);
+        return { daysInMonth, today, availableDaysInMonth: availableDays };
+    }, [currentMonth, availability]);
 
     const availableTimeSlots = useMemo(() => {
         if (!selectedDate) return [];
@@ -79,7 +82,6 @@ const BookingModal: FC<{
     const handleConfirmBooking = async () => {
         if (!selectedSlot || !selectedDate || !professional) return;
         setIsBooking(true);
-        // ... (booking logic remains the same)
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { alert("You must be logged in to book."); setIsBooking(false); return; }
         const { data: clientProfile } = await supabase.from('profiles').select('id').eq('user_id', user.id).single();
@@ -89,8 +91,7 @@ const BookingModal: FC<{
         const price = isFirstConsult ? 0 : (professional.hourly_rate || 0);
         const [hour, minute] = selectedSlot.split(':').map(Number);
         const appointmentStartTime = set(selectedDate, { hours: hour, minutes: minute, seconds: 0, milliseconds: 0 });
-        const appointmentEndTime = set(appointmentStartTime, { hours: appointmentStartTime.getHours() + 1 });
-        const { error, data } = await supabase.from('appointments').insert({ client_id: clientProfile.id, professional_id: professional.id, start_time: appointmentStartTime.toISOString(), end_time: appointmentEndTime.toISOString(), price: price, is_first_consult: isFirstConsult, status: 'confirmed' }).select().single();
+        const { error, data } = await supabase.from('appointments').insert({ client_id: clientProfile.id, professional_id: professional.id, start_time: appointmentStartTime.toISOString(), end_time: set(appointmentStartTime, { hours: hour + 1 }).toISOString(), price: price, is_first_consult: isFirstConsult, status: 'confirmed', meeting_link: 'https://meet.google.com/new' }).select().single();
         if (error) {
             alert(`Failed to book appointment: ${error.message}`);
         } else {
@@ -112,7 +113,6 @@ const BookingModal: FC<{
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Calendar */}
                     <div>
                         <div className="flex items-center justify-between mb-4">
                             <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft/></button>
@@ -123,10 +123,10 @@ const BookingModal: FC<{
                             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day}>{day}</div>)}
                         </div>
                         <div className="grid grid-cols-7 gap-2">
-                            {daysInMonth.map(day => {
-                                const isAvailable = availableDaysInMonth.has(format(day, 'yyyy-MM-dd'));
+                            {calendarData.daysInMonth.map((day: Date) => {
+                                const isAvailable = calendarData.availableDaysInMonth.has(format(day, 'yyyy-MM-dd'));
                                 const isSelected = selectedDate && isSameDay(day, selectedDate);
-                                const isPast = isBefore(day, today);
+                                const isPast = isBefore(day, calendarData.today);
                                 const isCurrentMonth = format(day, 'M') === format(currentMonth, 'M');
                                 return (
                                     <button key={day.toString()} onClick={() => { setSelectedDate(day); setSelectedSlot(null); }} disabled={!isAvailable || isPast}
@@ -137,7 +137,6 @@ const BookingModal: FC<{
                             })}
                         </div>
                     </div>
-                    {/* Time Slots */}
                     <div className="border-t md:border-t-0 md:border-l border-gray-200 md:pl-8 pt-6 md:pt-0">
                         <h4 className="font-semibold mb-4 text-center">Available Slots</h4>
                         {selectedDate ? (
@@ -208,7 +207,6 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
     return (
         <>
             <div className="max-w-5xl mx-auto text-gray-800">
-                {/* ... (rest of the profile UI remains the same) ... */}
                 <div className="bg-white border border-gray-200 rounded-2xl shadow-sm mb-8">
                     <div className="h-40 bg-gray-200 rounded-t-2xl"></div>
                     <div className="p-6">

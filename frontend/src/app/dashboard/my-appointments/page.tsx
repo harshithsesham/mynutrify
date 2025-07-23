@@ -3,8 +3,8 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Calendar, User, Tag, IndianRupee, MoreVertical, XCircle } from 'lucide-react';
-import { format, isBefore, startOfToday } from 'date-fns';
+import { Calendar, User, Tag, IndianRupee, MoreVertical, XCircle, Video } from 'lucide-react';
+import { format, isBefore, startOfToday, differenceInMinutes } from 'date-fns';
 
 type Appointment = {
     id: number;
@@ -12,9 +12,49 @@ type Appointment = {
     price: number;
     is_first_consult: boolean;
     status: string;
+    meeting_link: string | null;
     professional?: { full_name: string };
     client?: { full_name: string };
 };
+
+// New component to handle the dynamic join button and countdown
+const AppointmentActions = ({ appointment }: { appointment: Appointment }) => {
+    const [now, setNow] = useState(new Date());
+
+    useEffect(() => {
+        // Update the current time every 30 seconds to keep the countdown fresh
+        const timer = setInterval(() => setNow(new Date()), 30000);
+        return () => clearInterval(timer);
+    }, []);
+
+    const appointmentDate = new Date(appointment.start_time);
+    const minutesUntilStart = differenceInMinutes(appointmentDate, now);
+
+    if (appointment.status !== 'confirmed' || isBefore(appointmentDate, now)) {
+        return null; // Don't show for past or cancelled appointments
+    }
+
+    // Show Join button from 5 mins before to 60 mins after start time
+    if (minutesUntilStart <= 5 && minutesUntilStart > -60) {
+        return (
+            <a href={appointment.meeting_link || '#'} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 transition-colors">
+                <Video size={18} /> Join Meeting
+            </a>
+        );
+    }
+
+    // Show countdown if within 30 minutes
+    if (minutesUntilStart <= 30 && minutesUntilStart > 5) {
+        return (
+            <div className="text-sm text-green-700 font-semibold bg-green-100 px-3 py-1 rounded-full">
+                Starts in {minutesUntilStart} min
+            </div>
+        );
+    }
+
+    return null; // Otherwise, show nothing
+};
+
 
 export default function MyAppointmentsPage() {
     const supabase = createClientComponentClient();
@@ -118,6 +158,7 @@ export default function MyAppointmentsPage() {
                                 </div>
                             </div>
                             <div className="flex items-center gap-3">
+                                <AppointmentActions appointment={apt} />
                                 <div className={`flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full ${apt.status === 'confirmed' ? 'bg-blue-100 text-blue-800' : apt.status === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
                                     <Tag size={16} />
                                     <span className="capitalize">{apt.status}</span>
