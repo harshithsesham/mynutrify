@@ -2,8 +2,8 @@
 'use client';
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useEffect, useState, useCallback } from 'react';
-import { Calendar, User, Tag, IndianRupee } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Calendar, User, Tag, IndianRupee, MoreVertical, XCircle } from 'lucide-react';
 import { format, isBefore, startOfToday } from 'date-fns';
 
 type Appointment = {
@@ -22,14 +22,13 @@ export default function MyAppointmentsPage() {
     const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
+    const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     const fetchAppointments = useCallback(async () => {
         setLoading(true);
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            setLoading(false);
-            return;
-        }
+        if (!user) { setLoading(false); return; }
 
         const { data: profile } = await supabase.from('profiles').select('id, role').eq('user_id', user.id).single();
         if (profile) {
@@ -50,7 +49,19 @@ export default function MyAppointmentsPage() {
         fetchAppointments();
     }, [fetchAppointments]);
 
+    // Hook to close dropdown when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setOpenDropdownId(null);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [dropdownRef]);
+
     const handleCancelAppointment = async (appointmentId: number) => {
+        setOpenDropdownId(null);
         if (window.confirm('Are you sure you want to cancel this appointment?')) {
             const { error } = await supabase
                 .from('appointments')
@@ -112,9 +123,18 @@ export default function MyAppointmentsPage() {
                                     <span className="capitalize">{apt.status}</span>
                                 </div>
                                 {apt.status === 'confirmed' && !isPast && (
-                                    <button onClick={() => handleCancelAppointment(apt.id)} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
-                                        Cancel
-                                    </button>
+                                    <div className="relative" ref={openDropdownId === apt.id ? dropdownRef : null}>
+                                        <button onClick={() => setOpenDropdownId(openDropdownId === apt.id ? null : apt.id)} className="p-2 rounded-full hover:bg-gray-100">
+                                            <MoreVertical size={20} />
+                                        </button>
+                                        {openDropdownId === apt.id && (
+                                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                                                <button onClick={() => handleCancelAppointment(apt.id)} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                                                    <XCircle size={16} /> Cancel Appointment
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </div>
