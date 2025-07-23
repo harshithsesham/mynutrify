@@ -15,10 +15,10 @@ type Review = { id: number; rating: number; content: string; created_at: string;
 // --- SUCCESS MODAL ---
 const SuccessModal: FC<{ onClose: () => void; professionalName: string; appointmentTime: Date; }> = ({ onClose, professionalName, appointmentTime }) => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-lg text-center">
+        <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full shadow-lg text-center">
             <CheckCircle size={56} className="text-green-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Appointment Booked!</h2>
-            <p className="text-gray-600">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">Appointment Booked!</h2>
+            <p className="text-sm sm:text-base text-gray-600">
                 A Google Meet link has been created and will be available in your &quot;My Appointments&quot; section.
             </p>
             <button onClick={onClose} className="mt-6 w-full bg-gray-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700">
@@ -127,22 +127,22 @@ const BookingModal: FC<{
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-8 max-w-2xl w-full shadow-lg text-gray-800">
+            <div className="bg-white rounded-2xl p-4 sm:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-lg text-gray-800">
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold">Book Appointment</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold">Book Appointment</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-6 sm:grid sm:grid-cols-2 sm:gap-8 sm:space-y-0">
                     <div>
                         <div className="flex items-center justify-between mb-4">
-                            <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft/></button>
-                            <h3 className="text-lg font-semibold">{format(currentMonth, 'MMMM yyyy')}</h3>
-                            <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight/></button>
+                            <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft size={20}/></button>
+                            <h3 className="text-base sm:text-lg font-semibold">{format(currentMonth, 'MMMM yyyy')}</h3>
+                            <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight size={20}/></button>
                         </div>
-                        <div className="grid grid-cols-7 gap-2 text-center text-sm text-gray-500 mb-2">
-                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day}>{day}</div>)}
+                        <div className="grid grid-cols-7 gap-1 text-center text-xs sm:text-sm text-gray-500 mb-2">
+                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="py-1">{day}</div>)}
                         </div>
-                        <div className="grid grid-cols-7 gap-2">
+                        <div className="grid grid-cols-7 gap-1">
                             {calendarData.daysInMonth.map((day: Date) => {
                                 const isAvailable = calendarData.availableDaysInMonth.has(format(day, 'yyyy-MM-dd'));
                                 const isSelected = selectedDate && isSameDay(day, selectedDate);
@@ -150,29 +150,29 @@ const BookingModal: FC<{
                                 const isCurrentMonth = format(day, 'M') === format(currentMonth, 'M');
                                 return (
                                     <button key={day.toString()} onClick={() => { setSelectedDate(day); setSelectedSlot(null); }} disabled={!isAvailable || isPast}
-                                            className={`w-10 h-10 rounded-full transition-colors ${isPast ? 'text-gray-300' : ''} ${!isCurrentMonth ? 'text-gray-400' : ''} ${isSelected ? 'bg-gray-800 text-white' : ''} ${isAvailable && !isSelected && !isPast ? 'bg-green-100 text-green-800 hover:bg-green-200' : ''} ${!isAvailable && !isPast ? 'text-gray-500 cursor-not-allowed' : ''}`}>
+                                            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full transition-colors text-xs sm:text-sm ${isPast ? 'text-gray-300' : ''} ${!isCurrentMonth ? 'text-gray-400' : ''} ${isSelected ? 'bg-gray-800 text-white' : ''} ${isAvailable && !isSelected && !isPast ? 'bg-green-100 text-green-800 hover:bg-green-200' : ''} ${!isAvailable && !isPast ? 'text-gray-500 cursor-not-allowed' : ''}`}>
                                         {format(day, 'd')}
                                     </button>
                                 );
                             })}
                         </div>
                     </div>
-                    <div className="border-t md:border-t-0 md:border-l border-gray-200 md:pl-8 pt-6 md:pt-0">
+                    <div className="border-t sm:border-t-0 sm:border-l border-gray-200 sm:pl-8 pt-6 sm:pt-0">
                         <h4 className="font-semibold mb-4 text-center flex items-center justify-center gap-2"><Clock size={18}/> Available Slots</h4>
                         {selectedDate ? (
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-2 sm:gap-4">
                                 {availableTimeSlots.length > 0 ? (
                                     availableTimeSlots.map(time => (
-                                        <button key={time} onClick={() => setSelectedSlot(time)} className={`font-semibold py-3 px-2 rounded-lg transition duration-300 text-center ${selectedSlot === time ? 'bg-gray-800 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+                                        <button key={time} onClick={() => setSelectedSlot(time)} className={`font-semibold py-2 sm:py-3 px-2 rounded-lg transition duration-300 text-center text-sm sm:text-base ${selectedSlot === time ? 'bg-gray-800 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
                                             {time}
                                         </button>
                                     ))
                                 ) : (
-                                    <p className="text-gray-500 col-span-full text-center py-4">No available slots for this day.</p>
+                                    <p className="text-gray-500 col-span-full text-center py-4 text-sm">No available slots for this day.</p>
                                 )}
                             </div>
                         ) : (
-                            <p className="text-gray-500 text-center py-4">Please select a date from the calendar.</p>
+                            <p className="text-gray-500 text-center py-4 text-sm">Please select a date from the calendar.</p>
                         )}
                         {selectedSlot && (
                             <div className="mt-6 text-center">
@@ -226,86 +226,180 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
 
     return (
         <>
-            <div className="max-w-5xl mx-auto text-gray-800">
-                <div className="bg-white border border-gray-200 rounded-2xl shadow-sm mb-8">
-                    <div className="h-40 bg-gray-200 rounded-t-2xl"></div>
-                    <div className="p-6">
-                        <div className="flex items-end -mt-20">
-                            <div className="w-32 h-32 rounded-full bg-gray-300 border-4 border-white flex-shrink-0"></div>
-                            <div className="ml-6 flex-grow">
-                                <h1 className="text-3xl font-bold">{profile.full_name}</h1>
-                                <p className="text-gray-600 capitalize">{profile.role}</p>
-                                {profile.hourly_rate !== null && (<div className="flex items-center text-lg font-semibold text-gray-800 mt-2"><span className="text-gray-600 font-bold mr-1">₹</span>{profile.hourly_rate === 0 ? 'Free Consultation' : `${profile.hourly_rate} / hour`}</div>)}
+            <div className="max-w-5xl mx-auto text-gray-800 px-4 sm:px-6">
+                {/* Profile Header Card */}
+                <div className="bg-white border border-gray-200 rounded-2xl shadow-sm mb-6">
+                    {/* Cover Photo */}
+                    <div className="h-24 sm:h-40 bg-gray-200 rounded-t-2xl"></div>
+
+                    {/* Profile Content */}
+                    <div className="p-4 sm:p-6">
+                        {/* Mobile Layout */}
+                        <div className="sm:hidden">
+                            {/* Profile Image & Basic Info */}
+                            <div className="flex items-start -mt-16 mb-4">
+                                <div className="w-20 h-20 rounded-full bg-gray-300 border-4 border-white flex-shrink-0"></div>
+                                <div className="ml-4 flex-grow">
+                                    <h1 className="text-xl font-bold leading-tight">{profile.full_name}</h1>
+                                    <p className="text-gray-600 capitalize text-sm">{profile.role}</p>
+                                    {profile.hourly_rate !== null && (
+                                        <div className="flex items-center text-sm font-semibold text-gray-800 mt-1">
+                                            <span className="text-gray-600 font-bold mr-1">₹</span>
+                                            {profile.hourly_rate === 0 ? 'Free Consultation' : `${profile.hourly_rate} / hour`}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <div className="flex gap-4">
-                                <button className="bg-white border border-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-50">
-                                    <MessageSquare size={20} className="inline-block mr-2" /> Chat
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-3">
+                                <button className="flex-1 bg-white border border-gray-300 text-gray-800 font-medium py-2.5 px-4 rounded-lg hover:bg-gray-50 text-sm">
+                                    <MessageSquare size={16} className="inline-block mr-2" /> Chat
                                 </button>
-                                <button onClick={() => setShowBookingModal(true)} className="bg-gray-800 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-700">
+                                <button onClick={() => setShowBookingModal(true)} className="flex-1 bg-gray-800 text-white font-medium py-2.5 px-4 rounded-lg hover:bg-gray-700 text-sm">
                                     Book Appointment
                                 </button>
+                            </div>
+                        </div>
+
+                        {/* Desktop Layout */}
+                        <div className="hidden sm:block">
+                            <div className="flex items-end -mt-20">
+                                <div className="w-32 h-32 rounded-full bg-gray-300 border-4 border-white flex-shrink-0"></div>
+                                <div className="ml-6 flex-grow">
+                                    <h1 className="text-3xl font-bold">{profile.full_name}</h1>
+                                    <p className="text-gray-600 capitalize">{profile.role}</p>
+                                    {profile.hourly_rate !== null && (
+                                        <div className="flex items-center text-lg font-semibold text-gray-800 mt-2">
+                                            <span className="text-gray-600 font-bold mr-1">₹</span>
+                                            {profile.hourly_rate === 0 ? 'Free Consultation' : `${profile.hourly_rate} / hour`}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex gap-4">
+                                    <button className="bg-white border border-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-50">
+                                        <MessageSquare size={20} className="inline-block mr-2" /> Chat
+                                    </button>
+                                    <button onClick={() => setShowBookingModal(true)} className="bg-gray-800 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-700">
+                                        Book Appointment
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Content Grid */}
+                <div className="space-y-6 lg:grid lg:grid-cols-3 lg:gap-8 lg:space-y-0">
+                    {/* Sidebar */}
                     <div className="lg:col-span-1 space-y-6">
-                        <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                        {/* Specialties */}
+                        <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6">
                             <h3 className="text-lg font-bold mb-4">Speciality</h3>
                             <div className="flex flex-wrap gap-2">
-                                {profile.specialties?.map(spec => (<span key={spec} className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full">{spec}</span>)) || <p className="text-gray-500">No specialties listed.</p>}
+                                {profile.specialties?.map(spec => (
+                                    <span key={spec} className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full">
+                                        {spec}
+                                    </span>
+                                )) || <p className="text-gray-500 text-sm">No specialties listed.</p>}
                             </div>
                         </div>
-                        <div className="bg-white border border-gray-200 rounded-2xl p-6">
+
+                        {/* Interests */}
+                        <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6">
                             <h3 className="text-lg font-bold mb-4">Interested In</h3>
                             <div className="flex flex-wrap gap-2">
-                                {profile.interests?.map(interest => (<span key={interest} className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full">{interest}</span>)) || <p className="text-gray-500">No interests listed.</p>}
+                                {profile.interests?.map(interest => (
+                                    <span key={interest} className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full">
+                                        {interest}
+                                    </span>
+                                )) || <p className="text-gray-500 text-sm">No interests listed.</p>}
                             </div>
                         </div>
                     </div>
 
+                    {/* Main Content */}
                     <div className="lg:col-span-2">
                         <div className="bg-white border border-gray-200 rounded-2xl">
+                            {/* Tab Navigation */}
                             <div className="flex border-b border-gray-200">
-                                <button onClick={() => setActiveTab('reviews')} className={`py-4 px-6 font-semibold ${activeTab === 'reviews' ? 'border-b-2 border-gray-800 text-gray-800' : 'text-gray-500'}`}>Reviews</button>
-                                <button onClick={() => setActiveTab('about')} className={`py-4 px-6 font-semibold ${activeTab === 'about' ? 'border-b-2 border-gray-800 text-gray-800' : 'text-gray-500'}`}>About Me</button>
+                                <button
+                                    onClick={() => setActiveTab('reviews')}
+                                    className={`py-4 px-4 sm:px-6 font-semibold text-sm sm:text-base ${
+                                        activeTab === 'reviews'
+                                            ? 'border-b-2 border-gray-800 text-gray-800'
+                                            : 'text-gray-500'
+                                    }`}
+                                >
+                                    Reviews
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('about')}
+                                    className={`py-4 px-4 sm:px-6 font-semibold text-sm sm:text-base ${
+                                        activeTab === 'about'
+                                            ? 'border-b-2 border-gray-800 text-gray-800'
+                                            : 'text-gray-500'
+                                    }`}
+                                >
+                                    About Me
+                                </button>
                             </div>
-                            <div className="p-6">
+
+                            {/* Tab Content */}
+                            <div className="p-4 sm:p-6">
                                 {activeTab === 'reviews' && (
                                     <div>
-                                        <div className="flex items-center mb-4">
-                                            <h3 className="text-xl font-bold">{averageRating}/5</h3>
+                                        {/* Rating Summary */}
+                                        <div className="flex items-center mb-6">
+                                            <h3 className="text-xl sm:text-2xl font-bold">{averageRating}/5</h3>
                                             <div className="flex items-center gap-1 text-yellow-400 ml-2">
-                                                {[...Array(5)].map((_, i) => (<Star key={i} size={20} fill={i < Math.round(parseFloat(averageRating)) ? 'currentColor' : 'none'} stroke="currentColor"/>))}
+                                                {[...Array(5)].map((_, i) => (
+                                                    <Star
+                                                        key={i}
+                                                        size={20}
+                                                        fill={i < Math.round(parseFloat(averageRating)) ? 'currentColor' : 'none'}
+                                                        stroke="currentColor"
+                                                    />
+                                                ))}
                                             </div>
                                         </div>
+
+                                        {/* Reviews List */}
                                         <div className="space-y-6">
                                             {reviews.length > 0 ? (
                                                 reviews.map(review => (
-                                                    <div key={review.id} className="border-t border-gray-200 pt-4">
-                                                        <div className="flex items-center mb-2">
-                                                            <div className="w-10 h-10 rounded-full bg-gray-200 mr-4"></div>
+                                                    <div key={review.id} className="border-t border-gray-200 pt-4 first:border-t-0 first:pt-0">
+                                                        <div className="flex items-center mb-3">
+                                                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 mr-3 sm:mr-4"></div>
                                                             <div>
-                                                                <p className="font-semibold">{review.client.full_name}</p>
-                                                                <p className="text-sm text-gray-500">{format(new Date(review.created_at), 'dd MMMM yyyy')}</p>
+                                                                <p className="font-semibold text-sm sm:text-base">{review.client.full_name}</p>
+                                                                <p className="text-xs sm:text-sm text-gray-500">{format(new Date(review.created_at), 'dd MMMM yyyy')}</p>
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-1 text-yellow-400 mb-2">
-                                                            {[...Array(5)].map((_, i) => (<Star key={i} size={16} fill={i < review.rating ? 'currentColor' : 'none'} stroke="currentColor"/>))}
+                                                            {[...Array(5)].map((_, i) => (
+                                                                <Star
+                                                                    key={i}
+                                                                    size={14}
+                                                                    fill={i < review.rating ? 'currentColor' : 'none'}
+                                                                    stroke="currentColor"
+                                                                />
+                                                            ))}
                                                         </div>
-                                                        <p className="text-gray-600">{review.content}</p>
+                                                        <p className="text-gray-600 text-sm sm:text-base">{review.content}</p>
                                                     </div>
                                                 ))
                                             ) : (
-                                                <p className="text-gray-500">This coach has no reviews yet.</p>
+                                                <p className="text-gray-500 text-center py-8 text-sm sm:text-base">This coach has no reviews yet.</p>
                                             )}
                                         </div>
                                     </div>
                                 )}
                                 {activeTab === 'about' && (
                                     <div>
-                                        <p className="text-gray-600 whitespace-pre-wrap">{profile.bio || "This coach has not written a bio yet."}</p>
+                                        <p className="text-gray-600 whitespace-pre-wrap text-sm sm:text-base leading-relaxed">
+                                            {profile.bio || "This coach has not written a bio yet."}
+                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -314,6 +408,7 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
                 </div>
             </div>
 
+            {/* Booking Modal */}
             {showBookingModal && (
                 <BookingModal
                     professional={profile}
