@@ -3,7 +3,8 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, CheckCircle } from 'lucide-react';
+import Link from 'next/link';
 
 // Type definitions for the profile and availability data
 type Profile = {
@@ -12,6 +13,7 @@ type Profile = {
     specialties: string[] | null;
     interests: string[] | null;
     hourly_rate: number | null;
+    google_refresh_token: string | null;
 };
 
 type Availability = {
@@ -42,7 +44,7 @@ export default function ProfileSettingsPage() {
         setLoading(true);
         const { data: profileData } = await supabase
             .from('profiles')
-            .select('id, full_name, bio, specialties, interests, hourly_rate')
+            .select('id, full_name, bio, specialties, interests, hourly_rate, google_refresh_token')
             .eq('user_id', userId)
             .single();
 
@@ -142,6 +144,22 @@ export default function ProfileSettingsPage() {
     return (
         <div className="max-w-5xl mx-auto text-gray-800 space-y-8">
             <h1 className="text-3xl font-bold">Settings</h1>
+
+            {/* Google Calendar Integration Section */}
+            <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                <h2 className="text-2xl font-semibold mb-2">Integrations</h2>
+                <p className="text-gray-500 mb-6">Connect your Google Calendar to automatically create meeting links for new appointments.</p>
+                {profile?.google_refresh_token ? (
+                    <div className="flex items-center gap-3 text-green-600 font-semibold bg-green-50 border border-green-200 p-4 rounded-lg">
+                        <CheckCircle size={24} />
+                        <span>Your Google Calendar is connected.</span>
+                    </div>
+                ) : (
+                    <Link href="/api/auth/google" className="inline-block bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-500">
+                        Connect with Google Calendar
+                    </Link>
+                )}
+            </div>
 
             {/* Profile Information Section */}
             <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
