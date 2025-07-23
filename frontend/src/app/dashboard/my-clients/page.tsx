@@ -112,10 +112,12 @@ export default function MyClientsPage() {
         if (!coachProfileId) return;
         setOpenDropdownId(null);
         const { error } = await supabase.from('dismissed_requests').insert({ coach_id: coachProfileId, client_id: clientId });
-        if (error) alert("Failed to dismiss request: " + error.message);
-        else {
+        if (error) {
+            alert("Failed to dismiss request: " + error.message);
+        } else {
             alert("Request dismissed.");
-            await fetchData(coachProfileId);
+            // This is the fix: update the local state to remove the client from the requests list
+            setClientRequests(prevRequests => prevRequests.filter(req => req.id !== clientId));
         }
     };
 
