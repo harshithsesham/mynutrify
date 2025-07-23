@@ -13,31 +13,34 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        const { data: profile, error: profileError } = await supabase
+        // 1. Fetch the professional's details, including their name and refresh token
+        const { data: professionalProfile, error: profileError } = await supabase
             .from('profiles')
-            .select('google_refresh_token')
+            .select('full_name, google_refresh_token')
             .eq('id', professionalProfileId)
             .single();
 
-        if (profileError || !profile?.google_refresh_token) {
-            throw new Error('Could not find Google credentials for this professional.');
+        if (profileError || !professionalProfile?.google_refresh_token) {
+            throw new Error('Could not find Google credentials for this professional. Please connect your Google Calendar in settings.');
         }
 
+        // 2. Configure OAuth2 client
         const oauth2Client = new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID,
             process.env.GOOGLE_CLIENT_SECRET,
             process.env.GOOGLE_REDIRECT_URI
         );
-        oauth2Client.setCredentials({ refresh_token: profile.google_refresh_token });
+        oauth2Client.setCredentials({ refresh_token: professionalProfile.google_refresh_token });
 
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         const requestId = `nutrify-${appointmentId}-${Date.now()}`;
 
+        // 3. Insert the event with the corrected summary
         const insertResp = await calendar.events.insert({
             calendarId: 'primary',
             conferenceDataVersion: 1,
             requestBody: {
-                summary: `Consultation with ${clientEmail}`,
+                summary: `Consultation with ${professionalProfile.full_name}`, // This is the corrected event title
                 description: `Nutrition consultation booked via Nutrify.`,
                 start: { dateTime: startTime, timeZone: 'Asia/Kolkata' },
                 end:   { dateTime: endTime,   timeZone: 'Asia/Kolkata' },
@@ -65,6 +68,7 @@ export async function POST(req: NextRequest) {
             throw new Error('Failed to retrieve the Google Meet link.');
         }
 
+        // 4. Persist the final meeting link in Supabase
         const { error: updateError } = await supabase
             .from('appointments')
             .update({ meeting_link: meetingLink })
@@ -75,7 +79,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ meetingLink });
 
     } catch (err) {
-        // This is the corrected error handling block
         const error = err as Error;
         console.error('Error creating Google Meet link:', error);
         return NextResponse.json(
