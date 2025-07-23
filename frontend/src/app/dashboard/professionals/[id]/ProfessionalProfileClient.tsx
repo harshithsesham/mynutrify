@@ -43,7 +43,6 @@ const BookingModal: FC<{
     const [isBooking, setIsBooking] = useState(false);
     const [bookingSuccessData, setBookingSuccessData] = useState<{ time: Date } | null>(null);
 
-    // This block is rewritten to be more robust and fix the errors.
     const calendarData = useMemo(() => {
         const today = startOfToday();
         const start = startOfWeek(startOfMonth(currentMonth));
@@ -66,12 +65,10 @@ const BookingModal: FC<{
         const dayOfWeek = getDay(selectedDate);
         const dayAvailability = availability.find(a => a.day_of_week === dayOfWeek);
         if (!dayAvailability) return [];
-
         const bookedSlots = existingAppointments.map(apt => parseISO(apt.start_time)).filter(d => isSameDay(d, selectedDate)).map(d => format(d, 'HH:mm'));
         const slots = [];
         const startTime = parseInt(dayAvailability.start_time.split(':')[0]);
         const endTime = parseInt(dayAvailability.end_time.split(':')[0]);
-
         for (let hour = startTime; hour < endTime; hour++) {
             const time = `${String(hour).padStart(2, '0')}:00`;
             if (!bookedSlots.includes(time)) slots.push(time);
@@ -91,7 +88,21 @@ const BookingModal: FC<{
         const price = isFirstConsult ? 0 : (professional.hourly_rate || 0);
         const [hour, minute] = selectedSlot.split(':').map(Number);
         const appointmentStartTime = set(selectedDate, { hours: hour, minutes: minute, seconds: 0, milliseconds: 0 });
-        const { error, data } = await supabase.from('appointments').insert({ client_id: clientProfile.id, professional_id: professional.id, start_time: appointmentStartTime.toISOString(), end_time: set(appointmentStartTime, { hours: hour + 1 }).toISOString(), price: price, is_first_consult: isFirstConsult, status: 'confirmed', meeting_link: 'https://meet.google.com/new' }).select().single();
+
+        const uniqueMeetingId = `nutrify-${professional.id.substring(0, 8)}-${clientProfile.id.substring(0, 8)}-${appointmentStartTime.getTime()}`;
+        const meetingLink = `https://meet.google.com/${uniqueMeetingId.substring(0, 3)}-${uniqueMeetingId.substring(4, 8)}-${uniqueMeetingId.substring(9, 12)}`;
+
+        const { error, data } = await supabase.from('appointments').insert({
+            client_id: clientProfile.id,
+            professional_id: professional.id,
+            start_time: appointmentStartTime.toISOString(),
+            end_time: set(appointmentStartTime, { hours: hour + 1 }).toISOString(),
+            price: price,
+            is_first_consult: isFirstConsult,
+            status: 'confirmed',
+            meeting_link: meetingLink
+        }).select().single();
+
         if (error) {
             alert(`Failed to book appointment: ${error.message}`);
         } else {
