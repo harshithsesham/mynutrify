@@ -8,72 +8,82 @@ export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies });
     const { appointmentId, professionalProfileId, clientEmail, startTime, endTime } = await req.json();
 
+    // 1. Validate payload
     if (!appointmentId || !professionalProfileId || !clientEmail || !startTime || !endTime) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     try {
-        // 1. Get the professional's refresh token from your database
-        const { data: professionalProfile, error: profileError } = await supabase
+        // 2. Fetch the professional's stored Google refresh token
+        const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('google_refresh_token')
             .eq('id', professionalProfileId)
             .single();
 
-        if (profileError || !professionalProfile?.google_refresh_token) {
+        if (profileError || !profile?.google_refresh_token) {
             throw new Error('Could not find Google credentials for this professional.');
         }
 
-        // 2. Set up the Google OAuth client
+        // 3. Configure OAuth2 client
         const oauth2Client = new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID,
             process.env.GOOGLE_CLIENT_SECRET,
             process.env.GOOGLE_REDIRECT_URI
         );
-
-        // 3. Use the refresh token to get a new access token
-        oauth2Client.setCredentials({
-            refresh_token: professionalProfile.google_refresh_token,
-        });
+        oauth2Client.setCredentials({ refresh_token: profile.google_refresh_token });
 
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-        // 4. Create a new event in the professional's Google Calendar
-        const event = await calendar.events.insert({
+        // 4. Build a unique requestId
+        const requestId = `nutrify-${appointmentId}-${Date.now()}`;
+
+        // 5. Insert the event
+        const eventResponse = await calendar.events.insert({
             calendarId: 'primary',
             conferenceDataVersion: 1,
             requestBody: {
                 summary: `Consultation with ${clientEmail}`,
                 description: `Nutrition consultation booked via Nutrify.`,
-                start: {
-                    dateTime: startTime,
-                    timeZone: 'Asia/Kolkata', // Or make this dynamic
-                },
-                end: {
-                    dateTime: endTime,
-                    timeZone: 'Asia/Kolkata',
-                },
+                start: { dateTime: startTime, timeZone: 'Asia/Kolkata' },
+                end:   { dateTime: endTime,   timeZone: 'Asia/Kolkata' },
+                attendees: [{ email: clientEmail }],
                 conferenceData: {
                     createRequest: {
-                        requestId: `nutrify-booking-${appointmentId}`,
-                        conferenceSolutionKey: {
-                            type: 'hangoutsMeet',
-                        },
-                    },
-                },
-                attendees: [
-                    { email: clientEmail },
-                ],
-            },
+                        requestId,
+                        conferenceSolutionKey: { type: 'hangoutsMeet' }
+                    }
+                }
+            }
         });
 
-        const meetingLink = event.data.hangoutLink;
+        // This is the fix: The response object is accessed directly
+        let event = eventResponse.data;
 
-        if (!meetingLink) {
-            throw new Error('Failed to create Google Meet link.');
+        // 6. Poll until the conference is created
+        const maxAttempts = 5;
+        let attempt = 0;
+        while (
+            event.conferenceData?.createRequest?.status?.statusCode === 'pending' &&
+            attempt < maxAttempts
+            ) {
+            await new Promise((r) => setTimeout(r, 1500)); // wait 1.5s
+            const freshEventResponse = await calendar.events.get({
+                calendarId: 'primary',
+                eventId: event.id!,
+            });
+            event = freshEventResponse.data;
+            attempt++;
         }
 
-        // 5. Update the appointment in your database with the real meeting link
+        // 7. Extract the real Meet link
+        const meetingLink = event.hangoutLink;
+
+        if (!meetingLink) {
+            throw new Error('Failed to retrieve the Google Meet link.');
+        }
+
+        // 8. Persist the final meeting link in Supabase
         const { error: updateError } = await supabase
             .from('appointments')
             .update({ meeting_link: meetingLink })
@@ -83,10 +93,14 @@ export async function POST(req: NextRequest) {
             throw updateError;
         }
 
+        // 9. Return to client
         return NextResponse.json({ meetingLink });
 
-    } catch (error) {
-        console.error('Error creating Google Meet link:', error);
-        return NextResponse.json({ error: 'Failed to create meeting link.' }, { status: 500 });
+    } catch (err: any) {
+        console.error('Error creating Google Meet link:', err);
+        return NextResponse.json(
+            { error: err.message || 'Failed to create meeting link.' },
+            { status: 500 }
+        );
     }
 }
