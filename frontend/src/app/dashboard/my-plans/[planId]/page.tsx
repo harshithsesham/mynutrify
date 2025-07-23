@@ -5,14 +5,12 @@ import { redirect } from 'next/navigation';
 import PlanDetailClient from './PlanDetailClient';
 import React from 'react';
 
-// Define the props type to match what the build process expects,
-// which is a Promise containing the params.
+// Define the props type to match what the build process expects
 type PageProps = {
     params: Promise<{ planId: string }>;
 };
 
 // Make the component async and await the params to resolve the Promise.
-// This directly addresses the build error.
 export default async function PlanDetailPage({ params }: PageProps): Promise<React.ReactElement> {
     const resolvedParams = await params;
     const supabase = createServerComponentClient({ cookies });
@@ -23,10 +21,10 @@ export default async function PlanDetailPage({ params }: PageProps): Promise<Rea
         redirect('/login');
     }
 
-    // Fetch the plan details and its entries in parallel
+    // Fetch the plan details, its entries, and the assigned client's ID in parallel
     const planPromise = supabase
         .from('nutrition_plans')
-        .select(`*, creator:created_by_id(full_name)`)
+        .select(`*, creator:created_by_id(full_name), assigned_to_id`) // Added assigned_to_id
         .eq('id', planId)
         .single();
 

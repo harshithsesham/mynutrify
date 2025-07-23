@@ -1,9 +1,11 @@
 // app/dashboard/my-plans/[planId]/PlanDetailClient.tsx
 'use client';
 
-import { useState } from 'react';
-import { Calendar, Flame, Drumstick, Wheat, Droplets } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Calendar, Flame, Drumstick, Wheat, Droplets, ChevronLeft } from 'lucide-react';
 import { format } from 'date-fns';
+import Link from 'next/link';
 
 // --- TYPE DEFINITIONS ---
 type Plan = {
@@ -11,6 +13,7 @@ type Plan = {
     title: string;
     created_at: string;
     creator: { full_name: string } | null;
+    assigned_to_id: string; // The client's profile ID
 };
 
 type FoodEntry = {
@@ -31,7 +34,24 @@ interface PlanDetailClientProps {
 
 // --- MAIN COMPONENT ---
 export default function PlanDetailClient({ plan, initialEntries }: PlanDetailClientProps) {
+    const supabase = createClientComponentClient();
     const [entries] = useState<FoodEntry[]>(initialEntries);
+    const [userRole, setUserRole] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchUserRole = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('user_id', user.id)
+                    .single();
+                if (profile) setUserRole(profile.role);
+            }
+        };
+        fetchUserRole();
+    }, [supabase]);
 
     const totalMacros = entries.reduce((totals, entry) => {
         totals.calories += Number(entry.calories) || 0;
@@ -43,8 +63,19 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
 
     const mealTypes = ['Breakfast', 'Lunch', 'Snacks', 'Dinner'];
 
+    // Determine the correct "back" URL based on the user's role
+    const backUrl = userRole === 'client'
+        ? '/dashboard/my-plans'
+        : `/dashboard/my-clients/${plan.assigned_to_id}/plans`;
+
     return (
         <div className="text-gray-800">
+            {/* New Back Button / Breadcrumb */}
+            <Link href={backUrl} className="flex items-center gap-2 text-gray-500 hover:text-gray-800 font-semibold mb-6">
+                <ChevronLeft size={20} />
+                Back to Plans
+            </Link>
+
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-bold">{plan.title}</h1>
@@ -89,7 +120,6 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
                     <div className="relative w-48 h-48 mx-auto mb-6">
                         <svg className="w-full h-full" viewBox="0 0 36 36">
                             <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#eee" strokeWidth="3" />
-                            {/* Placeholder for progress */}
                             <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#4ade80" strokeWidth="3" strokeDasharray="100, 100" />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
