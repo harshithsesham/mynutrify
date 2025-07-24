@@ -115,7 +115,7 @@ const SuccessModal: FC<{
                                     {format(appointmentTime, 'EEEE, MMMM do, yyyy')}
                                 </p>
                                 <p className="font-medium text-gray-800">
-                                    {format(appointmentTime, 'h:mm a')} - {format(new Date(appointmentTime.getTime() + 60 * 60 * 1000), 'h:mm a')}
+                                    {format(appointmentTime, 'h:mm a')} - {format(addHours(appointmentTime, 1), 'h:mm a')}
                                 </p>
                             </div>
                         </div>
@@ -354,7 +354,7 @@ const BookingModal: FC<{
         await refreshAppointments(date);
     };
 
-    // FIXED: Enhanced booking logic with immediate state update
+    // FIXED: Enhanced booking logic with proper timezone handling
     const handleConfirmBooking = async () => {
         if (!selectedSlot || !selectedDate || !professional) return;
 
@@ -362,13 +362,29 @@ const BookingModal: FC<{
         setError(null);
 
         try {
+            // Create the appointment time in local timezone
+            const [hours, minutes] = selectedSlot.split(':').map(Number);
+            const localStartTime = set(selectedDate, {
+                hours,
+                minutes,
+                seconds: 0,
+                milliseconds: 0
+            });
+
+            // End time is 1 hour after start time
+            const localEndTime = addHours(localStartTime, 1);
+
+            console.log('Local booking time:', format(localStartTime, 'yyyy-MM-dd HH:mm zzz'));
+            console.log('UTC booking time:', localStartTime.toISOString());
+
             // Use server-side booking API for validation and creation
             const response = await fetch('/api/book-appointment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     professionalId: professional.id,
-                    selectedDate: selectedDate.toISOString(),
+                    // Send as ISO string (automatically converts to UTC)
+                    selectedDate: localStartTime.toISOString(),
                     selectedSlot: selectedSlot,
                 }),
             });
@@ -419,8 +435,9 @@ const BookingModal: FC<{
             setSelectedSlot(null);
 
             // Set success data with the appointment
+            // Parse the UTC time back to local for display
             setBookingSuccessData({
-                time: parseISO(appointment.start_time),
+                time: parseISO(appointment.start_time), // This will show in local time
                 isFirstConsult,
                 appointment: newAppointment
             });
@@ -614,7 +631,10 @@ const BookingModal: FC<{
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Time:</span>
-                                            <span className="font-medium">{selectedSlot} - {format(set(selectedDate, { hours: parseInt(selectedSlot.split(':')[0]) + 1 }), 'HH:mm')}</span>
+                                            <span className="font-medium">
+                                                {selectedSlot} - {format(set(selectedDate, { hours: parseInt(selectedSlot.split(':')[0]) + 1 }), 'HH:mm')}
+                                                <span className="text-xs text-gray-500 ml-1">(local time)</span>
+                                            </span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Duration:</span>
