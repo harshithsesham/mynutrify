@@ -4,7 +4,7 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { Trash2, Flame, Drumstick, Wheat, Droplets, PlusCircle, Save, ArrowLeft, AlertCircle, Check, Loader2 } from 'lucide-react';
+import { Trash2, Drumstick, Wheat, Droplets, PlusCircle, Save, ArrowLeft, AlertCircle, Check, Loader2 } from 'lucide-react';
 
 // --- TYPE DEFINITIONS ---
 type FoodEntry = {
@@ -214,10 +214,13 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
 
             // Insert new entries
             if (entriesToInsert.length > 0) {
-                const newEntries = entriesToInsert.map(({ temp_id, id, ...entry }) => ({
-                    ...entry,
-                    plan_id: plan.id
-                }));
+                const newEntries = entriesToInsert.map(entry => {
+                    const { temp_id: _, id: __, ...entryData } = entry;
+                    return {
+                        ...entryData,
+                        plan_id: plan.id
+                    };
+                });
 
                 const { error } = await supabase
                     .from('nutrition_plan_entries')
@@ -231,8 +234,9 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                 router.push(`/dashboard/my-plans/${plan.id}`);
             }, 1500);
 
-        } catch (error: any) {
-            setErrors([error.message || 'Failed to update plan']);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to update plan';
+            setErrors([errorMessage]);
         } finally {
             setIsSaving(false);
         }
