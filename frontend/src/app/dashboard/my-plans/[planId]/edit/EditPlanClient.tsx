@@ -412,7 +412,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                             return (
                                 <div key={mealType} className={`border-2 rounded-2xl p-8 shadow-lg ${config.color}`}>
                                     <div className="flex items-center justify-between mb-8">
-                                        <h3 className="text-2xl font-bold flex items-center gap-4">
+                                        <h3 className="text-2xl font-bold flex items-center gap-4 text-gray-900">
                                             <div className={`w-12 h-12 ${config.darkColor} rounded-2xl flex items-center justify-center text-2xl`}>
                                                 {config.icon}
                                             </div>
