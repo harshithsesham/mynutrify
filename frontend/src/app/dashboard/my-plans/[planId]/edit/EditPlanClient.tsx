@@ -182,22 +182,32 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
         setErrors([]);
 
         try {
+            console.log('Current plan title:', planTitle);
+            console.log('Original plan title:', plan.title);
+
             // Update plan details
-            const { error: planError } = await supabase
+            const updateData = {
+                title: planTitle.trim(),
+                target_calories: Number(targetMacros.calories),
+                target_protein: Number(targetMacros.protein),
+                target_carbs: Number(targetMacros.carbs),
+                target_fats: Number(targetMacros.fats)
+            };
+
+            console.log('Updating plan with data:', updateData);
+
+            const { error: planError, data: updatedPlan } = await supabase
                 .from('nutrition_plans')
-                .update({
-                    title: planTitle.trim(),
-                    target_calories: Number(targetMacros.calories),
-                    target_protein: Number(targetMacros.protein),
-                    target_carbs: Number(targetMacros.carbs),
-                    target_fats: Number(targetMacros.fats)
-                })
-                .eq('id', plan.id);
+                .update(updateData)
+                .eq('id', plan.id)
+                .select(); // This will return the updated row
 
             if (planError) {
                 console.error('Plan update error:', planError);
                 throw new Error(`Failed to update plan: ${planError.message}`);
             }
+
+            console.log('Plan updated successfully:', updatedPlan);
 
             // Delete removed entries
             if (deletedEntryIds.length > 0) {
@@ -437,7 +447,11 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                                             className="flex-1 font-bold bg-white border-b-3 border-gray-500 focus:outline-none focus:border-blue-600 focus:bg-blue-50 py-3 px-2 text-xl text-gray-900 placeholder-gray-600 rounded-t-lg"
                                                         />
                                                         <button
-                                                            onClick={() => removeFoodEntry(entry.temp_id!)}
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                removeFoodEntry(entry.temp_id!);
+                                                            }}
                                                             type="button"
                                                             className="text-gray-500 hover:text-red-600 hover:bg-red-100 p-3 rounded-xl transition-all duration-200 flex-shrink-0"
                                                         >
