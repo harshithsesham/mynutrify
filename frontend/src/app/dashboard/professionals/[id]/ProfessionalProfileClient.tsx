@@ -261,6 +261,8 @@ const BookingModal: FC<{
 
             const appointments = dayAppointments || [];
             console.log('Found appointments:', appointments); // Debug
+            console.log('Total confirmed appointments for this day:', appointments.length); // Debug count
+
             setFreshAppointments(appointments);
             return appointments;
         } catch (error) {
@@ -300,6 +302,7 @@ const BookingModal: FC<{
             });
 
         console.log('Booked slots for date:', format(selectedDate, 'yyyy-MM-dd'), bookedSlots); // Debug
+        console.log('Fresh appointments:', freshAppointments); // Debug all appointments
 
         const slots = [];
         const startTime = parseInt(dayAvailability.start_time.split(':')[0]);
