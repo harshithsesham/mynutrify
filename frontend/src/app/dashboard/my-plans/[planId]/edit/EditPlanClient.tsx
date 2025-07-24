@@ -103,7 +103,6 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                     .single();
 
                 const isCreator = planData?.created_by_id === profile.id;
-                const isCoach = profile.role === 'coach';
 
                 if (!isCreator && profile.role === 'client') {
                     router.push(`/dashboard/my-plans/${plan.id}`);
@@ -292,7 +291,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
                     <AlertCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
-                    <p className="text-gray-600">You don't have permission to edit this plan.</p>
+                    <p className="text-gray-600">You don&apos;t have permission to edit this plan.</p>
                 </div>
             </div>
         );
