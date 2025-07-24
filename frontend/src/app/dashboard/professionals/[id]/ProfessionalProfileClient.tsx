@@ -37,14 +37,15 @@ type Review = {
     client: { full_name: string };
 };
 
-// --- ENHANCED SUCCESS MODAL ---
+// --- ENHANCED SUCCESS MODAL (FIXED) ---
 const SuccessModal: FC<{
     onClose: () => void;
     professionalName: string;
     appointmentTime: Date;
     isFirstConsult: boolean;
     hourlyRate?: number | null;
-}> = ({ onClose, professionalName, appointmentTime, isFirstConsult, hourlyRate }) => {
+    onFinalClose: () => void;
+}> = ({ onClose, professionalName, appointmentTime, isFirstConsult, hourlyRate, onFinalClose }) => {
     const router = useRouter();
 
     // Optional: Play success sound
@@ -57,6 +58,15 @@ const SuccessModal: FC<{
             // Ignore sound errors
         }
     }, []);
+
+    const handleViewAppointments = () => {
+        onFinalClose(); // Close the booking modal
+        router.push('/dashboard/my-appointments');
+    };
+
+    const handleContinueBrowsing = () => {
+        onFinalClose(); // Close the booking modal
+    };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
@@ -145,17 +155,14 @@ const SuccessModal: FC<{
                 {/* Action Buttons */}
                 <div className="space-y-3">
                     <button
-                        onClick={() => {
-                            onClose();
-                            router.push('/dashboard/my-appointments');
-                        }}
+                        onClick={handleViewAppointments}
                         className="w-full bg-gray-800 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-700 transition-colors transform hover:scale-105"
                     >
                         View My Appointments
                     </button>
 
                     <button
-                        onClick={onClose}
+                        onClick={handleContinueBrowsing}
                         className="w-full bg-gray-100 text-gray-700 font-medium py-2 px-6 rounded-lg hover:bg-gray-200 transition-colors"
                     >
                         Continue Browsing
@@ -189,7 +196,7 @@ const ErrorModal: FC<{
     </div>
 );
 
-// --- IMPROVED BOOKING MODAL ---
+// --- IMPROVED BOOKING MODAL (FIXED) ---
 const BookingModal: FC<{
     professional: ProfessionalProfile;
     availability: Availability[];
@@ -233,12 +240,14 @@ const BookingModal: FC<{
         return { daysInMonth, today, availableDaysInMonth: availableDays, minBookableTime };
     }, [currentMonth, availability, minBookableTime]);
 
-    // Fetch fresh appointment data when date is selected
+    // FIXED: Fetch fresh appointment data when date is selected
     const refreshAppointments = async (selectedDate: Date) => {
         setIsLoadingSlots(true);
         try {
             const startOfDay = set(selectedDate, { hours: 0, minutes: 0, seconds: 0, milliseconds: 0 });
             const endOfDay = set(selectedDate, { hours: 23, minutes: 59, seconds: 59, milliseconds: 999 });
+
+            console.log('Fetching appointments for:', format(selectedDate, 'yyyy-MM-dd')); // Debug
 
             const { data: dayAppointments, error } = await supabase
                 .from('appointments')
@@ -251,11 +260,11 @@ const BookingModal: FC<{
             if (error) throw error;
 
             const appointments = dayAppointments || [];
+            console.log('Found appointments:', appointments); // Debug
             setFreshAppointments(appointments);
             return appointments;
         } catch (error) {
             console.error('Error fetching appointments:', error);
-            // Fallback to existing appointments
             const dayAppointments = existingAppointments.filter(apt => {
                 const aptDate = parseISO(apt.start_time);
                 return isSameDay(aptDate, selectedDate);
@@ -267,6 +276,7 @@ const BookingModal: FC<{
         }
     };
 
+    // FIXED: Time slot calculation to properly exclude booked times
     const availableTimeSlots = useMemo(() => {
         if (!selectedDate) return [];
 
@@ -274,15 +284,22 @@ const BookingModal: FC<{
         const dayAvailability = availability.find(a => a.day_of_week === dayOfWeek);
         if (!dayAvailability) return [];
 
+        // Get all booked slots for the selected date
         const bookedSlots = freshAppointments
-            .filter(apt => isSameDay(parseISO(apt.start_time), selectedDate))
+            .filter(apt => {
+                const aptStartTime = parseISO(apt.start_time);
+                return isSameDay(aptStartTime, selectedDate);
+            })
             .map(apt => {
                 const startTime = parseISO(apt.start_time);
+                const endTime = parseISO(apt.end_time);
                 return {
-                    start: format(startTime, 'HH:mm'),
-                    end: format(parseISO(apt.end_time), 'HH:mm')
+                    start: parseInt(format(startTime, 'H')), // Get hour as number
+                    end: parseInt(format(endTime, 'H'))      // Get hour as number
                 };
             });
+
+        console.log('Booked slots for date:', format(selectedDate, 'yyyy-MM-dd'), bookedSlots); // Debug
 
         const slots = [];
         const startTime = parseInt(dayAvailability.start_time.split(':')[0]);
@@ -302,18 +319,20 @@ const BookingModal: FC<{
                 continue;
             }
 
-            // Check if slot conflicts with existing appointments
+            // Check if this hour conflicts with any booked appointment
             const isBooked = bookedSlots.some(booked => {
-                const bookedStart = parseInt(booked.start.split(':')[0]);
-                const bookedEnd = parseInt(booked.end.split(':')[0]);
-                return hour >= bookedStart && hour < bookedEnd;
+                // Check if the current hour falls within any booked time range
+                return hour >= booked.start && hour < booked.end;
             });
+
+            console.log(`Hour ${hour}:00 - isBooked:`, isBooked); // Debug
 
             if (!isBooked) {
                 slots.push(timeSlot);
             }
         }
 
+        console.log('Available slots:', slots); // Debug
         return slots;
     }, [selectedDate, availability, calendarData.minBookableTime, freshAppointments]);
 
@@ -324,7 +343,7 @@ const BookingModal: FC<{
         await refreshAppointments(date);
     };
 
-    // Enhanced booking logic with server-side validation
+    // FIXED: Enhanced booking logic with proper success handling
     const handleConfirmBooking = async () => {
         if (!selectedSlot || !selectedDate || !professional) return;
 
@@ -376,16 +395,17 @@ const BookingModal: FC<{
                 // Continue with booking success even if meeting creation fails
             }
 
-            // Success!
-            onBookingSuccess({
-                start_time: appointment.start_time,
-                end_time: appointment.end_time
-            });
-
+            // FIXED: Just set success data - don't call onBookingSuccess yet
             setBookingSuccessData({
                 time: parseISO(appointment.start_time),
                 isFirstConsult
             });
+
+            // Add the new appointment to the fresh appointments for UI updates
+            setFreshAppointments([...freshAppointments, {
+                start_time: appointment.start_time,
+                end_time: appointment.end_time
+            }]);
 
         } catch (error) {
             console.error('Booking error:', error);
@@ -399,14 +419,24 @@ const BookingModal: FC<{
         }
     };
 
-    // Show success modal
+    // FIXED: Show success modal with proper close handling
     if (bookingSuccessData) {
         return <SuccessModal
-            onClose={onClose}
+            onClose={() => setBookingSuccessData(null)}
             professionalName={professional.full_name}
             appointmentTime={bookingSuccessData.time}
             isFirstConsult={bookingSuccessData.isFirstConsult}
             hourlyRate={professional.hourly_rate}
+            onFinalClose={() => {
+                // Now properly close everything and update parent
+                const newAppointment = {
+                    start_time: bookingSuccessData.time.toISOString(),
+                    end_time: new Date(bookingSuccessData.time.getTime() + 60 * 60 * 1000).toISOString()
+                };
+                setBookingSuccessData(null);
+                onBookingSuccess(newAppointment);
+                onClose(); // Close the booking modal
+            }}
         />;
     }
 
@@ -644,9 +674,11 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
         fetchData();
     }, [supabase, professionalId]);
 
+    // FIXED: Don't close booking modal immediately
     const handleBookingSuccess = (newAppointment: Appointment) => {
+        // Add to appointments list for future bookings
         setAppointments([...appointments, newAppointment]);
-        setShowBookingModal(false);
+        // Don't close modal here - let the success modal handle it
     };
 
     const averageRating = reviews.length > 0 ? (reviews.reduce((acc, review) => acc + review.rating, 0) / reviews.length).toFixed(1) : 'N/A';
