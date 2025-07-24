@@ -3,32 +3,92 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useEffect, useState, useMemo, FC } from 'react';
-import { Star, MessageSquare, Clock, ChevronLeft, ChevronRight, X, CheckCircle } from 'lucide-react';
-import { format, addMonths, subMonths, getDay, parseISO, set, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isBefore, startOfToday, startOfWeek, endOfWeek } from 'date-fns';
+import { Star, MessageSquare, Clock, ChevronLeft, ChevronRight, X, CheckCircle, AlertCircle, Calendar } from 'lucide-react';
+import { format, addMonths, subMonths, getDay, parseISO, set, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isBefore, startOfToday, startOfWeek, endOfWeek, addHours, isAfter } from 'date-fns';
 
 // --- TYPE DEFINITIONS ---
-type ProfessionalProfile = { id: string; full_name: string; bio: string | null; specialties: string[] | null; role: 'nutritionist' | 'trainer'; interests: string[] | null; hourly_rate: number | null; };
-type Availability = { day_of_week: number; start_time: string; end_time: string; };
-type Appointment = { start_time: string; };
-type Review = { id: number; rating: number; content: string; created_at: string; client: { full_name: string }; };
+type ProfessionalProfile = {
+    id: string;
+    full_name: string;
+    bio: string | null;
+    specialties: string[] | null;
+    role: 'nutritionist' | 'trainer';
+    interests: string[] | null;
+    hourly_rate: number | null;
+};
+
+type Availability = {
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+};
+
+type Appointment = {
+    start_time: string;
+    end_time: string;
+};
+
+type Review = {
+    id: number;
+    rating: number;
+    content: string;
+    created_at: string;
+    client: { full_name: string };
+};
 
 // --- SUCCESS MODAL ---
-const SuccessModal: FC<{ onClose: () => void; professionalName: string; appointmentTime: Date; }> = ({ onClose, professionalName, appointmentTime }) => (
+const SuccessModal: FC<{
+    onClose: () => void;
+    professionalName: string;
+    appointmentTime: Date;
+    isFirstConsult: boolean;
+}> = ({ onClose, professionalName, appointmentTime, isFirstConsult }) => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full shadow-lg text-center">
             <CheckCircle size={56} className="text-green-500 mx-auto mb-4" />
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">Appointment Booked!</h2>
-            <p className="text-sm sm:text-base text-gray-600">
+            <div className="space-y-2 mb-4">
+                <p className="text-sm text-gray-600">
+                    Your appointment with <span className="font-semibold">{professionalName}</span> is confirmed for:
+                </p>
+                <p className="font-semibold text-gray-800">
+                    {format(appointmentTime, 'PPP')} at {format(appointmentTime, 'p')}
+                </p>
+                {isFirstConsult && (
+                    <p className="text-sm text-green-600 font-medium">
+                        🎉 This is your first consultation - it&apos;s FREE!
+                    </p>
+                )}
+            </div>
+            <p className="text-xs text-gray-500 mb-6">
                 A Google Meet link has been created and will be available in your &quot;My Appointments&quot; section.
             </p>
-            <button onClick={onClose} className="mt-6 w-full bg-gray-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700">
+            <button onClick={onClose} className="w-full bg-gray-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700">
                 Done
             </button>
         </div>
     </div>
 );
 
-// --- NEW BOOKING MODAL ---
+// --- ERROR MODAL ---
+const ErrorModal: FC<{
+    onClose: () => void;
+    title: string;
+    message: string;
+}> = ({ onClose, title, message }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full shadow-lg text-center">
+            <AlertCircle size={56} className="text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">{title}</h2>
+            <p className="text-sm sm:text-base text-gray-600 mb-6">{message}</p>
+            <button onClick={() => onClose()} className="w-full bg-gray-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700">
+                Try Again
+            </button>
+        </div>
+    </div>
+);
+
+// --- IMPROVED BOOKING MODAL ---
 const BookingModal: FC<{
     professional: ProfessionalProfile;
     availability: Availability[];
@@ -41,7 +101,13 @@ const BookingModal: FC<{
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
     const [isBooking, setIsBooking] = useState(false);
-    const [bookingSuccessData, setBookingSuccessData] = useState<{ time: Date } | null>(null);
+    const [bookingSuccessData, setBookingSuccessData] = useState<{ time: Date; isFirstConsult: boolean } | null>(null);
+    const [error, setError] = useState<{ title: string; message: string } | null>(null);
+    const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+    const [freshAppointments, setFreshAppointments] = useState<Appointment[]>(existingAppointments);
+
+    // Calculate minimum bookable time (current time + 1 hour)
+    const minBookableTime = useMemo(() => addHours(new Date(), 1), []);
 
     const calendarData = useMemo(() => {
         const today = startOfToday();
@@ -53,76 +119,202 @@ const BookingModal: FC<{
         availability.forEach(avail => {
             daysInMonth.forEach(day => {
                 if (getDay(day) === avail.day_of_week && !isBefore(day, today)) {
-                    availableDays.add(format(day, 'yyyy-MM-dd'));
+                    // Check if any time slot on this day would be after minBookableTime
+                    const dayStart = set(day, { hours: parseInt(avail.start_time.split(':')[0]), minutes: 0, seconds: 0, milliseconds: 0 });
+                    const dayEnd = set(day, { hours: parseInt(avail.end_time.split(':')[0]) - 1, minutes: 59, seconds: 59, milliseconds: 999 });
+
+                    if (isAfter(dayEnd, minBookableTime)) {
+                        availableDays.add(format(day, 'yyyy-MM-dd'));
+                    }
                 }
             });
         });
-        return { daysInMonth, today, availableDaysInMonth: availableDays };
-    }, [currentMonth, availability]);
+        return { daysInMonth, today, availableDaysInMonth: availableDays, minBookableTime };
+    }, [currentMonth, availability, minBookableTime]);
+
+    // Fetch fresh appointment data when date is selected
+    const refreshAppointments = async (selectedDate: Date) => {
+        setIsLoadingSlots(true);
+        try {
+            const startOfDay = set(selectedDate, { hours: 0, minutes: 0, seconds: 0, milliseconds: 0 });
+            const endOfDay = set(selectedDate, { hours: 23, minutes: 59, seconds: 59, milliseconds: 999 });
+
+            const { data: dayAppointments, error } = await supabase
+                .from('appointments')
+                .select('start_time, end_time')
+                .eq('professional_id', professional.id)
+                .eq('status', 'confirmed')
+                .gte('start_time', startOfDay.toISOString())
+                .lte('start_time', endOfDay.toISOString());
+
+            if (error) throw error;
+
+            const appointments = dayAppointments || [];
+            setFreshAppointments(appointments);
+            return appointments;
+        } catch (error) {
+            console.error('Error fetching appointments:', error);
+            // Fallback to existing appointments
+            const dayAppointments = existingAppointments.filter(apt => {
+                const aptDate = parseISO(apt.start_time);
+                return isSameDay(aptDate, selectedDate);
+            });
+            setFreshAppointments(dayAppointments);
+            return dayAppointments;
+        } finally {
+            setIsLoadingSlots(false);
+        }
+    };
 
     const availableTimeSlots = useMemo(() => {
         if (!selectedDate) return [];
+
         const dayOfWeek = getDay(selectedDate);
         const dayAvailability = availability.find(a => a.day_of_week === dayOfWeek);
         if (!dayAvailability) return [];
-        const bookedSlots = existingAppointments.map(apt => parseISO(apt.start_time)).filter(d => isSameDay(d, selectedDate)).map(d => format(d, 'HH:mm'));
+
+        const bookedSlots = freshAppointments
+            .filter(apt => isSameDay(parseISO(apt.start_time), selectedDate))
+            .map(apt => {
+                const startTime = parseISO(apt.start_time);
+                return {
+                    start: format(startTime, 'HH:mm'),
+                    end: format(parseISO(apt.end_time), 'HH:mm')
+                };
+            });
+
         const slots = [];
         const startTime = parseInt(dayAvailability.start_time.split(':')[0]);
         const endTime = parseInt(dayAvailability.end_time.split(':')[0]);
-        for (let hour = startTime; hour < endTime; hour++) {
-            const time = `${String(hour).padStart(2, '0')}:00`;
-            if (!bookedSlots.includes(time)) slots.push(time);
-        }
-        return slots;
-    }, [selectedDate, availability, existingAppointments]);
 
+        for (let hour = startTime; hour < endTime; hour++) {
+            const timeSlot = `${String(hour).padStart(2, '0')}:00`;
+            const slotDateTime = set(selectedDate, {
+                hours: hour,
+                minutes: 0,
+                seconds: 0,
+                milliseconds: 0
+            });
+
+            // Check if slot is after minimum bookable time
+            if (!isAfter(slotDateTime, calendarData.minBookableTime)) {
+                continue;
+            }
+
+            // Check if slot conflicts with existing appointments
+            const isBooked = bookedSlots.some(booked => {
+                const bookedStart = parseInt(booked.start.split(':')[0]);
+                const bookedEnd = parseInt(booked.end.split(':')[0]);
+                return hour >= bookedStart && hour < bookedEnd;
+            });
+
+            if (!isBooked) {
+                slots.push(timeSlot);
+            }
+        }
+
+        return slots;
+    }, [selectedDate, availability, calendarData.minBookableTime, freshAppointments]);
+
+    // Handle date selection
+    const handleDateSelect = async (date: Date) => {
+        setSelectedDate(date);
+        setSelectedSlot(null);
+        await refreshAppointments(date);
+    };
+
+    // Enhanced booking logic with server-side validation
     const handleConfirmBooking = async () => {
         if (!selectedSlot || !selectedDate || !professional) return;
+
         setIsBooking(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user || !user.email) { alert("You must be logged in to book."); setIsBooking(false); return; }
-        const { data: clientProfile } = await supabase.from('profiles').select('id').eq('user_id', user.id).single();
-        if (!clientProfile) { alert("Could not find your profile."); setIsBooking(false); return; }
-        const { count } = await supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('client_id', clientProfile.id);
-        const isFirstConsult = count === 0;
-        const price = isFirstConsult ? 0 : (professional.hourly_rate || 0);
-        const [hour] = selectedSlot.split(':').map(Number);
-        const appointmentStartTime = set(selectedDate, { hours: hour, minutes: 0, seconds: 0, milliseconds: 0 });
-        const appointmentEndTime = set(appointmentStartTime, { hours: hour + 1 });
-        const { data: newAppointment, error: insertError } = await supabase.from('appointments').insert({ client_id: clientProfile.id, professional_id: professional.id, start_time: appointmentStartTime.toISOString(), end_time: appointmentEndTime.toISOString(), price: price, is_first_consult: isFirstConsult, status: 'confirmed' }).select().single();
-        if (insertError || !newAppointment) {
-            alert(`Failed to book appointment: ${insertError?.message}`);
-            setIsBooking(false);
-            return;
-        }
+        setError(null);
+
         try {
-            const response = await fetch('/api/create-meeting', {
+            // Use server-side booking API for validation and creation
+            const response = await fetch('/api/book-appointment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    appointmentId: newAppointment.id,
-                    professionalProfileId: professional.id,
-                    clientEmail: user.email,
-                    startTime: appointmentStartTime.toISOString(),
-                    endTime: appointmentEndTime.toISOString(),
+                    professionalId: professional.id,
+                    selectedDate: selectedDate.toISOString(),
+                    selectedSlot: selectedSlot,
                 }),
             });
+
+            const result = await response.json();
+
             if (!response.ok) {
-                const errorBody = await response.json();
-                throw new Error(errorBody.error || 'Failed to create meeting link on the server.');
+                throw new Error(result.error || 'Failed to book appointment');
             }
-            onBookingSuccess({ start_time: newAppointment.start_time });
-            setBookingSuccessData({ time: appointmentStartTime });
-        } catch (apiError) {
-            console.error(apiError);
-            const message = apiError instanceof Error ? apiError.message : 'An unknown error occurred.';
-            alert(`Appointment was booked, but failed to create a meeting link: ${message}`);
+
+            const { appointment, isFirstConsult } = result;
+
+            // Create Google Meet link
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user?.email) {
+                    const meetingResponse = await fetch('/api/create-meeting', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            appointmentId: appointment.id,
+                            professionalProfileId: professional.id,
+                            clientEmail: user.email,
+                            startTime: appointment.start_time,
+                            endTime: appointment.end_time,
+                        }),
+                    });
+
+                    if (!meetingResponse.ok) {
+                        console.error('Meeting creation failed, but appointment was booked');
+                    }
+                }
+            } catch (meetingError) {
+                console.error('Meeting creation error:', meetingError);
+                // Continue with booking success even if meeting creation fails
+            }
+
+            // Success!
+            onBookingSuccess({
+                start_time: appointment.start_time,
+                end_time: appointment.end_time
+            });
+
+            setBookingSuccessData({
+                time: parseISO(appointment.start_time),
+                isFirstConsult
+            });
+
+        } catch (error) {
+            console.error('Booking error:', error);
+            const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+            setError({
+                title: "Booking Failed",
+                message: errorMessage
+            });
+        } finally {
+            setIsBooking(false);
         }
-        setIsBooking(false);
     };
 
+    // Show success modal
     if (bookingSuccessData) {
-        return <SuccessModal onClose={onClose} professionalName={professional.full_name} appointmentTime={bookingSuccessData.time} />;
+        return <SuccessModal
+            onClose={onClose}
+            professionalName={professional.full_name}
+            appointmentTime={bookingSuccessData.time}
+            isFirstConsult={bookingSuccessData.isFirstConsult}
+        />;
+    }
+
+    // Show error modal
+    if (error) {
+        return <ErrorModal
+            onClose={() => setError(null)}
+            title={error.title}
+            message={error.message}
+        />;
     }
 
     return (
@@ -130,55 +322,182 @@ const BookingModal: FC<{
             <div className="bg-white rounded-2xl p-4 sm:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-lg text-gray-800">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl sm:text-2xl font-bold">Book Appointment</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <X size={24}/>
+                    </button>
                 </div>
+
                 <div className="space-y-6 sm:grid sm:grid-cols-2 sm:gap-8 sm:space-y-0">
+                    {/* Calendar Section */}
                     <div>
                         <div className="flex items-center justify-between mb-4">
-                            <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft size={20}/></button>
-                            <h3 className="text-base sm:text-lg font-semibold">{format(currentMonth, 'MMMM yyyy')}</h3>
-                            <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight size={20}/></button>
+                            <button
+                                onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+                                className="p-2 rounded-full hover:bg-gray-100"
+                            >
+                                <ChevronLeft size={20}/>
+                            </button>
+                            <h3 className="text-base sm:text-lg font-semibold">
+                                {format(currentMonth, 'MMMM yyyy')}
+                            </h3>
+                            <button
+                                onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                                className="p-2 rounded-full hover:bg-gray-100"
+                            >
+                                <ChevronRight size={20}/>
+                            </button>
                         </div>
+
                         <div className="grid grid-cols-7 gap-1 text-center text-xs sm:text-sm text-gray-500 mb-2">
-                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="py-1">{day}</div>)}
+                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day =>
+                                <div key={day} className="py-1">{day}</div>
+                            )}
                         </div>
+
                         <div className="grid grid-cols-7 gap-1">
                             {calendarData.daysInMonth.map((day: Date) => {
                                 const isAvailable = calendarData.availableDaysInMonth.has(format(day, 'yyyy-MM-dd'));
                                 const isSelected = selectedDate && isSameDay(day, selectedDate);
                                 const isPast = isBefore(day, calendarData.today);
                                 const isCurrentMonth = format(day, 'M') === format(currentMonth, 'M');
+
                                 return (
-                                    <button key={day.toString()} onClick={() => { setSelectedDate(day); setSelectedSlot(null); }} disabled={!isAvailable || isPast}
-                                            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full transition-colors text-xs sm:text-sm ${isPast ? 'text-gray-300' : ''} ${!isCurrentMonth ? 'text-gray-400' : ''} ${isSelected ? 'bg-gray-800 text-white' : ''} ${isAvailable && !isSelected && !isPast ? 'bg-green-100 text-green-800 hover:bg-green-200' : ''} ${!isAvailable && !isPast ? 'text-gray-500 cursor-not-allowed' : ''}`}>
+                                    <button
+                                        key={day.toString()}
+                                        onClick={() => handleDateSelect(day)}
+                                        disabled={!isAvailable || isPast}
+                                        className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full transition-colors text-xs sm:text-sm ${
+                                            isPast ? 'text-gray-300' : ''
+                                        } ${
+                                            !isCurrentMonth ? 'text-gray-400' : ''
+                                        } ${
+                                            isSelected ? 'bg-gray-800 text-white' : ''
+                                        } ${
+                                            isAvailable && !isSelected && !isPast ? 'bg-green-100 text-green-800 hover:bg-green-200' : ''
+                                        } ${
+                                            !isAvailable && !isPast ? 'text-gray-500 cursor-not-allowed' : ''
+                                        }`}
+                                    >
                                         {format(day, 'd')}
                                     </button>
                                 );
                             })}
                         </div>
+
+                        <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                            <h4 className="text-sm font-medium text-blue-800 mb-2">Booking Guidelines:</h4>
+                            <ul className="text-xs text-blue-700 space-y-1">
+                                <li>• Green dates have available slots</li>
+                                <li>• Book at least 1 hour in advance</li>
+                                <li>• First consultation is always free</li>
+                                <li>• Each session is 1 hour long</li>
+                            </ul>
+                        </div>
                     </div>
+
+                    {/* Time Slots Section */}
                     <div className="border-t sm:border-t-0 sm:border-l border-gray-200 sm:pl-8 pt-6 sm:pt-0">
-                        <h4 className="font-semibold mb-4 text-center flex items-center justify-center gap-2"><Clock size={18}/> Available Slots</h4>
+                        <h4 className="font-semibold mb-4 text-center flex items-center justify-center gap-2">
+                            <Clock size={18}/> Available Slots
+                        </h4>
+
                         {selectedDate ? (
-                            <div className="grid grid-cols-2 gap-2 sm:gap-4">
-                                {availableTimeSlots.length > 0 ? (
-                                    availableTimeSlots.map(time => (
-                                        <button key={time} onClick={() => setSelectedSlot(time)} className={`font-semibold py-2 sm:py-3 px-2 rounded-lg transition duration-300 text-center text-sm sm:text-base ${selectedSlot === time ? 'bg-gray-800 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
-                                            {time}
-                                        </button>
-                                    ))
+                            <div className="space-y-3">
+                                {isLoadingSlots ? (
+                                    <div className="text-center py-8">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800 mx-auto"></div>
+                                        <p className="text-sm text-gray-500 mt-2">Loading available slots...</p>
+                                    </div>
                                 ) : (
-                                    <p className="text-gray-500 col-span-full text-center py-4 text-sm">No available slots for this day.</p>
+                                    <div className="grid grid-cols-2 gap-2 sm:gap-4">
+                                        {availableTimeSlots.length > 0 ? (
+                                            availableTimeSlots.map(time => (
+                                                <button
+                                                    key={time}
+                                                    onClick={() => setSelectedSlot(time)}
+                                                    className={`font-semibold py-2 sm:py-3 px-2 rounded-lg transition duration-300 text-center text-sm sm:text-base ${
+                                                        selectedSlot === time
+                                                            ? 'bg-gray-800 text-white'
+                                                            : 'bg-gray-100 hover:bg-gray-200'
+                                                    }`}
+                                                >
+                                                    {time}
+                                                </button>
+                                            ))
+                                        ) : (
+                                            <div className="col-span-full text-center py-8">
+                                                <Clock size={48} className="mx-auto text-gray-300 mb-3" />
+                                                <p className="text-gray-500 text-sm mb-2">
+                                                    No available slots for this day
+                                                </p>
+                                                <p className="text-xs text-gray-400">
+                                                    Try selecting another date
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         ) : (
-                            <p className="text-gray-500 text-center py-4 text-sm">Please select a date from the calendar.</p>
+                            <div className="text-center py-8">
+                                <Calendar size={48} className="mx-auto text-gray-300 mb-3" />
+                                <p className="text-gray-500 text-sm">
+                                    Please select a date from the calendar
+                                </p>
+                            </div>
                         )}
-                        {selectedSlot && (
-                            <div className="mt-6 text-center">
-                                <button onClick={handleConfirmBooking} disabled={isBooking} className="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg disabled:bg-gray-500">
-                                    {isBooking ? 'Booking...' : 'Confirm'}
+
+                        {selectedSlot && selectedDate && (
+                            <div className="mt-6 space-y-4">
+                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                    <h5 className="font-medium text-gray-800 mb-3">Booking Summary</h5>
+                                    <div className="space-y-2 text-sm">
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">Professional:</span>
+                                            <span className="font-medium">{professional.full_name}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">Date:</span>
+                                            <span className="font-medium">{format(selectedDate, 'MMM dd, yyyy')}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">Time:</span>
+                                            <span className="font-medium">{selectedSlot} - {format(set(selectedDate, { hours: parseInt(selectedSlot.split(':')[0]) + 1 }), 'HH:mm')}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">Duration:</span>
+                                            <span className="font-medium">1 hour</span>
+                                        </div>
+                                        <div className="flex justify-between border-t border-gray-200 pt-2">
+                                            <span className="text-gray-600">Price:</span>
+                                            <span className="font-bold text-green-600">
+                                                First consultation FREE
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={handleConfirmBooking}
+                                    disabled={isBooking}
+                                    className="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                                >
+                                    {isBooking ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                                            Booking Appointment...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle size={20} className="mr-2" />
+                                            Confirm Booking
+                                        </>
+                                    )}
                                 </button>
+
+                                <p className="text-xs text-gray-500 text-center">
+                                    By booking, you agree to our terms of service and cancellation policy.
+                                </p>
                             </div>
                         )}
                     </div>
@@ -202,25 +521,34 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
-            const profilePromise = supabase.from('profiles').select('id, full_name, bio, specialties, role, interests, hourly_rate').eq('id', professionalId).single();
-            const reviewsPromise = supabase.from('reviews').select('id, rating, content, created_at, client:client_id(full_name)').eq('professional_id', professionalId);
-            const availabilityPromise = supabase.from('availability').select('day_of_week, start_time, end_time').eq('professional_id', professionalId);
-            const appointmentsPromise = supabase.from('appointments').select('start_time').eq('professional_id', professionalId).gte('start_time', new Date().toISOString());
-            const [{ data: profileData }, { data: reviewData }, { data: availabilityData }, { data: appointmentData }] = await Promise.all([profilePromise, reviewsPromise, availabilityPromise, appointmentsPromise]);
-            setProfile(profileData);
-            setReviews((reviewData as unknown as Review[]) || []);
-            setAvailability(availabilityData || []);
-            setAppointments(appointmentData || []);
-            setLoading(false);
+            try {
+                const [profileRes, reviewsRes, availabilityRes, appointmentsRes] = await Promise.all([
+                    supabase.from('profiles').select('id, full_name, bio, specialties, role, interests, hourly_rate').eq('id', professionalId).single(),
+                    supabase.from('reviews').select('id, rating, content, created_at, client:client_id(full_name)').eq('professional_id', professionalId),
+                    supabase.from('availability').select('day_of_week, start_time, end_time').eq('professional_id', professionalId),
+                    supabase.from('appointments').select('start_time, end_time').eq('professional_id', professionalId).eq('status', 'confirmed').gte('start_time', new Date().toISOString())
+                ]);
+
+                setProfile(profileRes.data);
+                setReviews((reviewsRes.data as unknown as Review[]) || []);
+                setAvailability(availabilityRes.data || []);
+                setAppointments(appointmentsRes.data || []);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            } finally {
+                setLoading(false);
+            }
         };
-        fetchData().catch(console.error);
+        fetchData();
     }, [supabase, professionalId]);
 
     const handleBookingSuccess = (newAppointment: Appointment) => {
         setAppointments([...appointments, newAppointment]);
+        setShowBookingModal(false);
     };
 
     const averageRating = reviews.length > 0 ? (reviews.reduce((acc, review) => acc + review.rating, 0) / reviews.length).toFixed(1) : 'N/A';
+
     if (loading) return <div className="text-center p-8 text-gray-500">Loading Profile...</div>;
     if (!profile) return <div className="text-center p-8 text-gray-500">Professional not found.</div>;
 
