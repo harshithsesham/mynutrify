@@ -3,6 +3,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { addHours, isAfter, parseISO } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 
 export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies });
@@ -10,8 +11,8 @@ export async function POST(req: NextRequest) {
     try {
         const {
             professionalId,
-            startTime,    // Now expecting ISO string in UTC
-            endTime       // Now expecting ISO string in UTC
+            startTime,    // ISO string in UTC
+            endTime,      // ISO string in UTC
         } = await req.json();
 
         // Validate input
@@ -54,31 +55,62 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // Validation 2: Check professional availability
-        // Note: getDay() and getHours() will return values in the server's timezone
-        // This is okay as long as availability is also stored in the same timezone
-        const dayOfWeek = appointmentStartTime.getDay();
-        const hour = appointmentStartTime.getHours();
+        // Get professional's timezone
+        const { data: professionalProfile, error: profTimezoneError } = await supabase
+            .from('profiles')
+            .select('timezone, hourly_rate')
+            .eq('id', professionalId)
+            .single();
 
+        if (profTimezoneError || !professionalProfile) {
+            return NextResponse.json({
+                error: 'Professional not found'
+            }, { status: 404 });
+        }
+
+        const professionalTimezone = professionalProfile.timezone || 'UTC';
+
+        // Convert appointment time to professional's timezone for availability check
+        const appointmentInProfTimezone = toZonedTime(appointmentStartTime, professionalTimezone);
+
+        // Get day of week in professional's timezone
+        // JavaScript: 0=Sunday, 1=Monday, ..., 6=Saturday
+        // Database: 0=Monday, 1=Tuesday, ..., 6=Sunday
+        const jsDayOfWeek = appointmentInProfTimezone.getDay();
+        const dbDayOfWeek = jsDayOfWeek === 0 ? 6 : jsDayOfWeek - 1;
+
+        // Get hour in professional's timezone
+        const appointmentHourInProfTimezone = appointmentInProfTimezone.getHours();
+
+        console.log('Timezone conversion:', {
+            utcTime: startTime,
+            professionalTimezone,
+            localTime: appointmentInProfTimezone,
+            dayOfWeek: dbDayOfWeek,
+            hour: appointmentHourInProfTimezone
+        });
+
+        // Check professional availability
         const { data: availability, error: availError } = await supabase
             .from('availability')
             .select('start_time, end_time')
             .eq('professional_id', professionalId)
-            .eq('day_of_week', dayOfWeek)
+            .eq('day_of_week', dbDayOfWeek)
             .single();
 
         if (availError || !availability) {
+            const dayName = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][dbDayOfWeek];
             return NextResponse.json({
-                error: 'Professional not available on this day'
+                error: `Professional is not available on ${dayName}s`
             }, { status: 400 });
         }
 
         const availStart = parseInt(availability.start_time.split(':')[0]);
         const availEnd = parseInt(availability.end_time.split(':')[0]);
 
-        if (hour < availStart || hour >= availEnd) {
+        if (appointmentHourInProfTimezone < availStart || appointmentHourInProfTimezone >= availEnd) {
             return NextResponse.json({
-                error: 'Selected time slot is outside professional availability'
+                error: `This time (${appointmentHourInProfTimezone}:00 ${professionalTimezone}) is outside the professional's working hours (${availability.start_time} - ${availability.end_time} ${professionalTimezone})`
             }, { status: 400 });
         }
 
@@ -120,21 +152,7 @@ export async function POST(req: NextRequest) {
         }
 
         const isFirstConsult = (appointmentCount || 0) === 0;
-
-        // Get professional details for pricing
-        const { data: professional, error: profError } = await supabase
-            .from('profiles')
-            .select('hourly_rate')
-            .eq('id', professionalId)
-            .single();
-
-        if (profError || !professional) {
-            return NextResponse.json({
-                error: 'Professional not found'
-            }, { status: 404 });
-        }
-
-        const price = isFirstConsult ? 0 : (professional.hourly_rate || 0);
+        const price = isFirstConsult ? 0 : (professionalProfile.hourly_rate || 0);
 
         // Create appointment with database-level validation
         const { data: newAppointment, error: insertError } = await supabase
@@ -142,8 +160,8 @@ export async function POST(req: NextRequest) {
             .insert({
                 client_id: clientProfile.id,
                 professional_id: professionalId,
-                start_time: startTime,  // Already in UTC ISO format
-                end_time: endTime,      // Already in UTC ISO format
+                start_time: startTime,  // Store in UTC
+                end_time: endTime,      // Store in UTC
                 price: price,
                 is_first_consult: isFirstConsult,
                 status: 'confirmed',
@@ -157,14 +175,12 @@ export async function POST(req: NextRequest) {
         if (insertError) {
             console.error('Insert error:', insertError);
 
-            // Check if it's a unique constraint violation (double booking)
             if (insertError.code === '23505') {
                 return NextResponse.json({
                     error: 'This time slot has just been booked by someone else'
                 }, { status: 409 });
             }
 
-            // Check if it's a trigger error (overlap or availability)
             if (insertError.message.includes('conflicts with existing booking')) {
                 return NextResponse.json({
                     error: 'This time slot conflicts with an existing appointment'

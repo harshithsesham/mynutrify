@@ -16,6 +16,7 @@ type ProfessionalProfile = {
     role: 'nutritionist' | 'trainer';
     interests: string[] | null;
     hourly_rate: number | null;
+    timezone?: string; // Add timezone
 };
 
 type Availability = {
@@ -561,6 +562,21 @@ const BookingModal: FC<{
                                 <li>• Each session is 1 hour long</li>
                             </ul>
                         </div>
+
+                        {/* Timezone Information */}
+                        {professional.timezone && professional.timezone !== Intl.DateTimeFormat().resolvedOptions().timeZone && (
+                            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                                <div className="flex items-center gap-2 text-amber-800">
+                                    <Clock size={16} />
+                                    <span className="font-medium">Timezone Information</span>
+                                </div>
+                                <div className="mt-2 space-y-1 text-amber-700">
+                                    <p>Professional's timezone: {professional.timezone}</p>
+                                    <p>Your timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
+                                    <p className="text-xs mt-1">Times shown are in your local timezone</p>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Time Slots Section */}
@@ -694,7 +710,7 @@ export default function ProfessionalProfileClient({ professionalId }: { professi
             setLoading(true);
             try {
                 const [profileRes, reviewsRes, availabilityRes, appointmentsRes] = await Promise.all([
-                    supabase.from('profiles').select('id, full_name, bio, specialties, role, interests, hourly_rate').eq('id', professionalId).single(),
+                    supabase.from('profiles').select('id, full_name, bio, specialties, role, interests, hourly_rate, timezone').eq('id', professionalId).single(),
                     supabase.from('reviews').select('id, rating, content, created_at, client:client_id(full_name)').eq('professional_id', professionalId),
                     supabase.from('availability').select('day_of_week, start_time, end_time').eq('professional_id', professionalId),
                     supabase.from('appointments').select('start_time, end_time').eq('professional_id', professionalId).eq('status', 'confirmed').gte('start_time', new Date().toISOString())

@@ -3,7 +3,7 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, CheckCircle, Globe } from 'lucide-react';
 import Link from 'next/link';
 
 // Type definitions for the profile and availability data
@@ -13,7 +13,8 @@ type Profile = {
     specialties: string[] | null;
     interests: string[] | null;
     hourly_rate: number | null;
-    google_refresh_token: string | null; // Added for Google integration
+    google_refresh_token: string | null;
+    timezone: string; // Added timezone
 };
 
 type Availability = {
@@ -32,24 +33,48 @@ const timeOptions = Array.from({ length: 24 * 2 }, (_, i) => {
     return `${formattedHour}:${formattedMinute}`;
 });
 
+// Common timezones
+const timezones = [
+    { value: 'America/Los_Angeles', label: 'Pacific Time (PT) - Los Angeles' },
+    { value: 'America/Denver', label: 'Mountain Time (MT) - Denver' },
+    { value: 'America/Chicago', label: 'Central Time (CT) - Chicago' },
+    { value: 'America/New_York', label: 'Eastern Time (ET) - New York' },
+    { value: 'America/Sao_Paulo', label: 'Brasília Time (BRT) - São Paulo' },
+    { value: 'Europe/London', label: 'British Time (GMT/BST) - London' },
+    { value: 'Europe/Paris', label: 'Central European Time (CET) - Paris' },
+    { value: 'Europe/Moscow', label: 'Moscow Time (MSK) - Moscow' },
+    { value: 'Asia/Dubai', label: 'Gulf Standard Time (GST) - Dubai' },
+    { value: 'Asia/Kolkata', label: 'India Standard Time (IST) - Mumbai' },
+    { value: 'Asia/Bangkok', label: 'Indochina Time (ICT) - Bangkok' },
+    { value: 'Asia/Shanghai', label: 'China Standard Time (CST) - Shanghai' },
+    { value: 'Asia/Tokyo', label: 'Japan Standard Time (JST) - Tokyo' },
+    { value: 'Australia/Sydney', label: 'Australian Eastern Time (AET) - Sydney' },
+    { value: 'Pacific/Auckland', label: 'New Zealand Time (NZST) - Auckland' },
+];
+
 export default function ProfileSettingsPage() {
     const supabase = createClientComponentClient();
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [availability, setAvailability] = useState<Availability[]>([]);
     const [profileId, setProfileId] = useState<string | null>(null);
+    const [detectedTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
     // Fetches all necessary data for the page
     const getProfileData = useCallback(async (userId: string) => {
         setLoading(true);
         const { data: profileData } = await supabase
             .from('profiles')
-            .select('id, full_name, bio, specialties, interests, hourly_rate, google_refresh_token')
+            .select('id, full_name, bio, specialties, interests, hourly_rate, google_refresh_token, timezone')
             .eq('user_id', userId)
             .single();
 
         if (profileData) {
-            setProfile(profileData);
+            // Set timezone to detected timezone if not set
+            setProfile({
+                ...profileData,
+                timezone: profileData.timezone || detectedTimezone
+            });
             setProfileId(profileData.id);
             const { data: availabilityData } = await supabase
                 .from('availability')
@@ -58,7 +83,7 @@ export default function ProfileSettingsPage() {
             setAvailability(availabilityData || []);
         }
         setLoading(false);
-    }, [supabase]);
+    }, [supabase, detectedTimezone]);
 
     useEffect(() => {
         const getUserAndData = async () => {
@@ -103,7 +128,8 @@ export default function ProfileSettingsPage() {
                 bio: profile.bio,
                 specialties: profile.specialties,
                 interests: profile.interests,
-                hourly_rate: profile.hourly_rate
+                hourly_rate: profile.hourly_rate,
+                timezone: profile.timezone
             })
             .eq('id', profileId);
 
@@ -181,13 +207,34 @@ export default function ProfileSettingsPage() {
                         <label className="block text-gray-600 font-medium mb-2">Hourly Rate (₹)</label>
                         <input type="number" value={profile?.hourly_rate || ''} onChange={(e) => handleProfileChange('hourly_rate', parseFloat(e.target.value) || null)} className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800" placeholder="1500"/>
                     </div>
+                    <div>
+                        <label className="block text-gray-600 font-medium mb-2">
+                            <Globe size={16} className="inline mr-1" />
+                            Your Timezone
+                        </label>
+                        <select
+                            value={profile?.timezone || detectedTimezone}
+                            onChange={(e) => handleProfileChange('timezone', e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800"
+                        >
+                            {timezones.map(tz => (
+                                <option key={tz.value} value={tz.value}>{tz.label}</option>
+                            ))}
+                        </select>
+                        <p className="text-sm text-gray-500 mt-1">
+                            Your availability hours will be interpreted in this timezone. Currently detected: {detectedTimezone}
+                        </p>
+                    </div>
                 </div>
             </div>
 
             {/* Redesigned Availability Section */}
             <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
                 <h2 className="text-2xl font-semibold mb-2">Set Your Weekly Availability</h2>
-                <p className="text-gray-500 mb-6">Define your standard working hours. Clients will be able to book appointments during these times.</p>
+                <p className="text-gray-500 mb-6">
+                    Define your standard working hours in your timezone ({profile?.timezone || detectedTimezone}).
+                    Clients in other timezones will see these hours converted to their local time.
+                </p>
 
                 <div className="space-y-4">
                     {daysOfWeek.map((day, dayIndex) => {

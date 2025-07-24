@@ -12,6 +12,7 @@
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.51.0",
     "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "geist": "^1.4.2",
     "googleapis": "^153.0.0",
     "lucide-react": "^0.525.0",
