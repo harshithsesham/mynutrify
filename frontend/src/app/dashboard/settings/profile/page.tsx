@@ -3,10 +3,10 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2, CheckCircle, Globe } from 'lucide-react';
+import { CheckCircle, Globe, User, Calendar, DollarSign, Sparkles, Clock, Save, AlertCircle, Check } from 'lucide-react';
 import Link from 'next/link';
 
-// Type definitions for the profile and availability data
+// Type definitions
 type Profile = {
     full_name: string;
     bio: string | null;
@@ -14,7 +14,7 @@ type Profile = {
     interests: string[] | null;
     hourly_rate: number | null;
     google_refresh_token: string | null;
-    timezone: string; // Added timezone
+    timezone: string;
 };
 
 type Availability = {
@@ -33,44 +33,56 @@ const timeOptions = Array.from({ length: 24 * 2 }, (_, i) => {
     return `${formattedHour}:${formattedMinute}`;
 });
 
-// Common timezones
-const timezones = [
-    { value: 'America/Los_Angeles', label: 'Pacific Time (PT) - Los Angeles' },
-    { value: 'America/Denver', label: 'Mountain Time (MT) - Denver' },
-    { value: 'America/Chicago', label: 'Central Time (CT) - Chicago' },
-    { value: 'America/New_York', label: 'Eastern Time (ET) - New York' },
-    { value: 'America/Sao_Paulo', label: 'Brasília Time (BRT) - São Paulo' },
-    { value: 'Europe/London', label: 'British Time (GMT/BST) - London' },
-    { value: 'Europe/Paris', label: 'Central European Time (CET) - Paris' },
-    { value: 'Europe/Moscow', label: 'Moscow Time (MSK) - Moscow' },
-    { value: 'Asia/Dubai', label: 'Gulf Standard Time (GST) - Dubai' },
-    { value: 'Asia/Kolkata', label: 'India Standard Time (IST) - Mumbai' },
-    { value: 'Asia/Bangkok', label: 'Indochina Time (ICT) - Bangkok' },
-    { value: 'Asia/Shanghai', label: 'China Standard Time (CST) - Shanghai' },
-    { value: 'Asia/Tokyo', label: 'Japan Standard Time (JST) - Tokyo' },
-    { value: 'Australia/Sydney', label: 'Australian Eastern Time (AET) - Sydney' },
-    { value: 'Pacific/Auckland', label: 'New Zealand Time (NZST) - Auckland' },
-];
+// Common timezones organized by region
+const timezoneGroups = {
+    'Americas': [
+        { value: 'America/Los_Angeles', label: 'Pacific Time (Los Angeles)', offset: 'UTC-8' },
+        { value: 'America/Denver', label: 'Mountain Time (Denver)', offset: 'UTC-7' },
+        { value: 'America/Chicago', label: 'Central Time (Chicago)', offset: 'UTC-6' },
+        { value: 'America/New_York', label: 'Eastern Time (New York)', offset: 'UTC-5' },
+        { value: 'America/Sao_Paulo', label: 'Brazil Time (São Paulo)', offset: 'UTC-3' },
+    ],
+    'Europe': [
+        { value: 'Europe/London', label: 'British Time (London)', offset: 'UTC+0' },
+        { value: 'Europe/Paris', label: 'Central European (Paris)', offset: 'UTC+1' },
+        { value: 'Europe/Moscow', label: 'Moscow Time', offset: 'UTC+3' },
+    ],
+    'Asia & Pacific': [
+        { value: 'Asia/Dubai', label: 'Gulf Standard (Dubai)', offset: 'UTC+4' },
+        { value: 'Asia/Kolkata', label: 'India Standard Time', offset: 'UTC+5:30' },
+        { value: 'Asia/Bangkok', label: 'Indochina (Bangkok)', offset: 'UTC+7' },
+        { value: 'Asia/Shanghai', label: 'China Standard Time', offset: 'UTC+8' },
+        { value: 'Asia/Tokyo', label: 'Japan Standard Time', offset: 'UTC+9' },
+        { value: 'Australia/Sydney', label: 'Sydney Time', offset: 'UTC+10' },
+        { value: 'Pacific/Auckland', label: 'New Zealand Time', offset: 'UTC+12' },
+    ],
+};
 
 export default function ProfileSettingsPage() {
     const supabase = createClientComponentClient();
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [availability, setAvailability] = useState<Availability[]>([]);
     const [profileId, setProfileId] = useState<string | null>(null);
     const [detectedTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    const [showSuccess, setShowSuccess] = useState(false);
+    const [activeSection, setActiveSection] = useState<'profile' | 'availability' | 'integrations'>('profile');
 
-    // Fetches all necessary data for the page
+    // Fetches all necessary data
     const getProfileData = useCallback(async (userId: string) => {
         setLoading(true);
-        const { data: profileData } = await supabase
+        const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('id, full_name, bio, specialties, interests, hourly_rate, google_refresh_token, timezone')
             .eq('user_id', userId)
             .single();
 
+        if (profileError) {
+            console.error('Error loading profile:', profileError);
+        }
+
         if (profileData) {
-            // Set timezone to detected timezone if not set
             setProfile({
                 ...profileData,
                 timezone: profileData.timezone || detectedTimezone
@@ -93,7 +105,7 @@ export default function ProfileSettingsPage() {
         getUserAndData();
     }, [supabase, getProfileData]);
 
-    // Handlers for state changes
+    // State change handlers
     const handleProfileChange = (field: keyof Profile, value: string | string[] | number | null) => {
         if (profile) setProfile({ ...profile, [field]: value });
     };
@@ -117,10 +129,11 @@ export default function ProfileSettingsPage() {
         }
     };
 
-    // Logic to save all changes to the database
+    // Save changes
     const handleSaveChanges = async () => {
         if (!profileId || !profile) return;
-        setLoading(true);
+        setSaving(true);
+        setShowSuccess(false);
 
         const { error: profileError } = await supabase
             .from('profiles')
@@ -129,20 +142,20 @@ export default function ProfileSettingsPage() {
                 specialties: profile.specialties,
                 interests: profile.interests,
                 hourly_rate: profile.hourly_rate,
-                timezone: profile.timezone
+                timezone: profile.timezone || detectedTimezone
             })
             .eq('id', profileId);
 
         if (profileError) {
             alert('Error saving profile: ' + profileError.message);
-            setLoading(false);
+            setSaving(false);
             return;
         }
 
         const { error: deleteError } = await supabase.from('availability').delete().eq('professional_id', profileId);
         if (deleteError) {
             alert('Error clearing schedule: ' + deleteError.message);
-            setLoading(false);
+            setSaving(false);
             return;
         }
 
@@ -157,113 +170,329 @@ export default function ProfileSettingsPage() {
             if (insertError) {
                 alert('Error saving availability: ' + insertError.message);
             } else {
-                alert('Changes saved successfully!');
+                setShowSuccess(true);
+                setTimeout(() => setShowSuccess(false), 3000);
             }
         } else {
-            alert('Profile saved successfully! Availability schedule is empty.');
+            setShowSuccess(true);
+            setTimeout(() => setShowSuccess(false), 3000);
         }
-        setLoading(false);
+        setSaving(false);
     };
 
-    if (loading) return <div className="text-center p-8 text-gray-500">Loading Settings...</div>;
+    if (loading) return (
+        <div className="flex items-center justify-center min-h-screen">
+            <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto mb-4"></div>
+                <p className="text-gray-500">Loading Settings...</p>
+            </div>
+        </div>
+    );
 
     return (
-        <div className="max-w-5xl mx-auto text-gray-800 space-y-8">
-            <h1 className="text-3xl font-bold">Settings</h1>
-
-            {/* Google Calendar Integration Section */}
-            <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                <h2 className="text-2xl font-semibold mb-2">Integrations</h2>
-                <p className="text-gray-500 mb-6">Connect your Google Calendar to automatically create meeting links for new appointments.</p>
-                {profile?.google_refresh_token ? (
-                    <div className="flex items-center gap-3 text-green-600 font-semibold bg-green-50 border border-green-200 p-4 rounded-lg">
-                        <CheckCircle size={24} />
-                        <span>Your Google Calendar is connected.</span>
-                    </div>
-                ) : (
-                    <Link href="/api/auth/google" className="inline-block bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-500">
-                        Connect with Google Calendar
-                    </Link>
-                )}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {/* Header */}
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold text-gray-800 mb-2">Settings</h1>
+                <p className="text-gray-600">Manage your profile, availability, and integrations</p>
             </div>
 
-            {/* Profile Information Section */}
-            <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                <h2 className="text-2xl font-semibold mb-6">Your Profile Information</h2>
+            {/* Navigation Tabs */}
+            <div className="flex space-x-1 mb-8 bg-gray-100 p-1 rounded-lg">
+                <button
+                    onClick={() => setActiveSection('profile')}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
+                        activeSection === 'profile'
+                            ? 'bg-white text-gray-800 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                >
+                    <User size={18} />
+                    <span>Profile</span>
+                </button>
+                <button
+                    onClick={() => setActiveSection('availability')}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
+                        activeSection === 'availability'
+                            ? 'bg-white text-gray-800 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                >
+                    <Calendar size={18} />
+                    <span>Availability</span>
+                </button>
+                <button
+                    onClick={() => setActiveSection('integrations')}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
+                        activeSection === 'integrations'
+                            ? 'bg-white text-gray-800 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                >
+                    <Sparkles size={18} />
+                    <span>Integrations</span>
+                </button>
+            </div>
+
+            {/* Profile Section */}
+            {activeSection === 'profile' && (
                 <div className="space-y-6">
-                    <div>
-                        <label className="block text-gray-600 font-medium mb-2">Bio</label>
-                        <textarea value={profile?.bio || ''} onChange={(e) => handleProfileChange('bio', e.target.value)} className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800" rows={5} placeholder="Tell clients about yourself..."/>
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 md:p-8">
+                        <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+                            <User size={20} />
+                            Profile Information
+                        </h2>
+
+                        <div className="grid gap-6 md:grid-cols-2">
+                            {/* Bio - Full Width */}
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
+                                <textarea
+                                    value={profile?.bio || ''}
+                                    onChange={(e) => handleProfileChange('bio', e.target.value)}
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-all"
+                                    rows={4}
+                                    placeholder="Tell clients about yourself, your experience, and approach..."
+                                />
+                                <p className="text-xs text-gray-500 mt-1">A good bio helps clients connect with you</p>
+                            </div>
+
+                            {/* Specialties */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Specialties</label>
+                                <input
+                                    type="text"
+                                    value={profile?.specialties?.join(', ') || ''}
+                                    onChange={(e) => handleProfileChange('specialties', e.target.value.split(',').map(s => s.trim()))}
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-all"
+                                    placeholder="e.g., Weight Loss, Sports Nutrition"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Separate with commas</p>
+                            </div>
+
+                            {/* Interests */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Interests</label>
+                                <input
+                                    type="text"
+                                    value={profile?.interests?.join(', ') || ''}
+                                    onChange={(e) => handleProfileChange('interests', e.target.value.split(',').map(s => s.trim()))}
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-all"
+                                    placeholder="e.g., Bodybuilding, Meditation"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Separate with commas</p>
+                            </div>
+
+                            {/* Hourly Rate */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <DollarSign size={16} className="inline mr-1" />
+                                    Hourly Rate (₹)
+                                </label>
+                                <input
+                                    type="number"
+                                    value={profile?.hourly_rate || ''}
+                                    onChange={(e) => handleProfileChange('hourly_rate', parseFloat(e.target.value) || null)}
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-all"
+                                    placeholder="1500"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">First consultation is always free</p>
+                            </div>
+
+                            {/* Timezone */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <Globe size={16} className="inline mr-1" />
+                                    Your Timezone
+                                </label>
+                                <select
+                                    value={profile?.timezone || detectedTimezone}
+                                    onChange={(e) => handleProfileChange('timezone', e.target.value)}
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-all"
+                                >
+                                    {Object.entries(timezoneGroups).map(([region, zones]) => (
+                                        <optgroup key={region} label={region}>
+                                            {zones.map(tz => (
+                                                <option key={tz.value} value={tz.value}>
+                                                    {tz.label} ({tz.offset})
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Currently detected: {detectedTimezone}
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label className="block text-gray-600 font-medium mb-2">Specialties (comma-separated)</label>
-                        <input type="text" value={profile?.specialties?.join(', ') || ''} onChange={(e) => handleProfileChange('specialties', e.target.value.split(',').map(s => s.trim()))} className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800" placeholder="e.g., Weight Loss, Sports Nutrition"/>
+                </div>
+            )}
+
+            {/* Availability Section */}
+            {activeSection === 'availability' && (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 md:p-8">
+                    <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
+                        <Calendar size={20} />
+                        Weekly Availability
+                    </h2>
+                    <p className="text-gray-600 mb-6">
+                        Set your working hours in {profile?.timezone || detectedTimezone}. Clients will see these times converted to their timezone.
+                    </p>
+
+                    <div className="space-y-3">
+                        {daysOfWeek.map((day, dayIndex) => {
+                            const daySlot = availability.find(slot => slot.day_of_week === dayIndex);
+                            const isEnabled = !!daySlot;
+                            return (
+                                <div key={day} className={`p-4 rounded-lg border transition-all ${
+                                    isEnabled ? 'bg-gray-50 border-gray-300' : 'bg-white border-gray-200'
+                                }`}>
+                                    <div className="flex items-center justify-between flex-wrap gap-4">
+                                        <div className="flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={isEnabled}
+                                                onChange={(e) => toggleDayAvailability(dayIndex, e.target.checked)}
+                                                className="h-5 w-5 rounded border-gray-300 text-gray-800 focus:ring-gray-700 mr-3"
+                                            />
+                                            <span className={`font-medium ${isEnabled ? 'text-gray-800' : 'text-gray-500'}`}>
+                                                {day}
+                                            </span>
+                                        </div>
+
+                                        {isEnabled && (
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Clock size={16} className="text-gray-500" />
+                                                    <select
+                                                        value={daySlot?.start_time || '09:00'}
+                                                        onChange={(e) => handleAvailabilityChange(dayIndex, 'start_time', e.target.value)}
+                                                        className="bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800"
+                                                    >
+                                                        {timeOptions.map(time => <option key={time} value={time}>{time}</option>)}
+                                                    </select>
+                                                </div>
+                                                <span className="text-gray-500">to</span>
+                                                <select
+                                                    value={daySlot?.end_time || '17:00'}
+                                                    onChange={(e) => handleAvailabilityChange(dayIndex, 'end_time', e.target.value)}
+                                                    className="bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800"
+                                                >
+                                                    {timeOptions.map(time => <option key={time} value={time}>{time}</option>)}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
-                    <div>
-                        <label className="block text-gray-600 font-medium mb-2">Interests (comma-separated)</label>
-                        <input type="text" value={profile?.interests?.join(', ') || ''} onChange={(e) => handleProfileChange('interests', e.target.value.split(',').map(s => s.trim()))} className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800" placeholder="e.g., Bodybuilding, Meditation"/>
-                    </div>
-                    <div>
-                        <label className="block text-gray-600 font-medium mb-2">Hourly Rate (₹)</label>
-                        <input type="number" value={profile?.hourly_rate || ''} onChange={(e) => handleProfileChange('hourly_rate', parseFloat(e.target.value) || null)} className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800" placeholder="1500"/>
-                    </div>
-                    <div>
-                        <label className="block text-gray-600 font-medium mb-2">
-                            <Globe size={16} className="inline mr-1" />
-                            Your Timezone
-                        </label>
-                        <select
-                            value={profile?.timezone || detectedTimezone}
-                            onChange={(e) => handleProfileChange('timezone', e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800"
-                        >
-                            {timezones.map(tz => (
-                                <option key={tz.value} value={tz.value}>{tz.label}</option>
-                            ))}
-                        </select>
-                        <p className="text-sm text-gray-500 mt-1">
-                            Your availability hours will be interpreted in this timezone. Currently detected: {detectedTimezone}
+
+                    <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-sm text-blue-800">
+                            <AlertCircle size={16} className="inline mr-1" />
+                            Tip: Keep your availability updated to help clients book at convenient times for both of you.
                         </p>
                     </div>
                 </div>
-            </div>
+            )}
 
-            {/* Redesigned Availability Section */}
-            <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                <h2 className="text-2xl font-semibold mb-2">Set Your Weekly Availability</h2>
-                <p className="text-gray-500 mb-6">
-                    Define your standard working hours in your timezone ({profile?.timezone || detectedTimezone}).
-                    Clients in other timezones will see these hours converted to their local time.
-                </p>
+            {/* Integrations Section */}
+            {activeSection === 'integrations' && (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 md:p-8">
+                    <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
+                        <Sparkles size={20} />
+                        Integrations
+                    </h2>
+                    <p className="text-gray-600 mb-6">
+                        Connect your favorite tools to enhance your coaching experience
+                    </p>
 
-                <div className="space-y-4">
-                    {daysOfWeek.map((day, dayIndex) => {
-                        const daySlot = availability.find(slot => slot.day_of_week === dayIndex);
-                        const isEnabled = !!daySlot;
-                        return (
-                            <div key={day} className="grid grid-cols-1 md:grid-cols-3 items-center gap-4 p-4 border-b border-gray-200">
-                                <div className="flex items-center">
-                                    <input type="checkbox" checked={isEnabled} onChange={(e) => toggleDayAvailability(dayIndex, e.target.checked)} className="h-5 w-5 rounded border-gray-300 text-gray-800 focus:ring-gray-700 mr-4"/>
-                                    <span className="font-medium">{day}</span>
+                    <div className="space-y-4">
+                        {/* Google Calendar Integration */}
+                        <div className="p-6 border border-gray-200 rounded-lg">
+                            <div className="flex items-start justify-between">
+                                <div className="flex gap-4">
+                                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <Calendar className="text-blue-600" size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-gray-800">Google Calendar</h3>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            Automatically create Google Meet links for appointments
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className={`col-span-2 flex items-center gap-4 transition-opacity ${isEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                                    <select value={daySlot?.start_time || '09:00'} onChange={(e) => handleAvailabilityChange(dayIndex, 'start_time', e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 w-full">
-                                        {timeOptions.map(time => <option key={time} value={time}>{time}</option>)}
-                                    </select>
-                                    <span className="text-gray-500">-</span>
-                                    <select value={daySlot?.end_time || '17:00'} onChange={(e) => handleAvailabilityChange(dayIndex, 'end_time', e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 w-full">
-                                        {timeOptions.map(time => <option key={time} value={time}>{time}</option>)}
-                                    </select>
-                                </div>
+
+                                {profile?.google_refresh_token ? (
+                                    <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
+                                        <CheckCircle size={16} />
+                                        <span className="text-sm font-medium">Connected</span>
+                                    </div>
+                                ) : (
+                                    <Link
+                                        href="/api/auth/google"
+                                        className="bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                                    >
+                                        Connect
+                                    </Link>
+                                )}
                             </div>
-                        );
-                    })}
+                        </div>
+
+                        {/* Coming Soon Integrations */}
+                        <div className="p-6 border border-gray-200 rounded-lg opacity-60">
+                            <div className="flex items-start justify-between">
+                                <div className="flex gap-4">
+                                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                                        <Calendar className="text-gray-400" size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-gray-800">Zoom</h3>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            Create Zoom meetings for appointments
+                                        </p>
+                                    </div>
+                                </div>
+                                <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
+                                    Coming Soon
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div className="mt-8 flex justify-end">
-                <button onClick={handleSaveChanges} disabled={loading} className="bg-gray-800 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-700 disabled:bg-gray-500">
-                    {loading ? 'Saving...' : 'Save Changes'}
-                </button>
+            )}
+
+            {/* Save Button - Fixed at bottom */}
+            <div className="sticky bottom-0 bg-gradient-to-t from-gray-50 to-transparent pt-8 pb-4 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+                <div className="flex items-center justify-between max-w-6xl mx-auto">
+                    <div>
+                        {showSuccess && (
+                            <div className="flex items-center gap-2 text-green-600">
+                                <Check size={20} />
+                                <span className="font-medium">Changes saved successfully!</span>
+                            </div>
+                        )}
+                    </div>
+                    <button
+                        onClick={handleSaveChanges}
+                        disabled={saving}
+                        className="bg-gray-800 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    >
+                        {saving ? (
+                            <>
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                Saving...
+                            </>
+                        ) : (
+                            <>
+                                <Save size={20} />
+                                Save Changes
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
         </div>
     );
