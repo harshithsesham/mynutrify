@@ -343,7 +343,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.calories}
                                         onChange={(e) => setTargetMacros({...targetMacros, calories: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border-2 border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
+                                        className="w-full bg-white border-2 border-gray-400 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
                                     />
                                 </div>
                                 <div>
@@ -352,7 +352,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.protein}
                                         onChange={(e) => setTargetMacros({...targetMacros, protein: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border-2 border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
+                                        className="w-full bg-white border-2 border-gray-400 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
                                     />
                                 </div>
                                 <div>
@@ -361,7 +361,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.carbs}
                                         onChange={(e) => setTargetMacros({...targetMacros, carbs: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border-2 border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
+                                        className="w-full bg-white border-2 border-gray-400 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
                                     />
                                 </div>
                                 <div>
@@ -370,7 +370,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.fats}
                                         onChange={(e) => setTargetMacros({...targetMacros, fats: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border-2 border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
+                                        className="w-full bg-white border-2 border-gray-400 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
                                     />
                                 </div>
                             </div>
@@ -434,11 +434,12 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                                             value={entry.food_name}
                                                             onChange={e => updateFoodEntry(entry.temp_id!, 'food_name', e.target.value)}
                                                             placeholder="Enter food name..."
-                                                            className="flex-1 font-bold bg-transparent border-b-2 border-gray-400 focus:outline-none focus:border-blue-600 py-3 text-xl text-gray-900 placeholder-gray-500"
+                                                            className="flex-1 font-bold bg-white border-b-3 border-gray-500 focus:outline-none focus:border-blue-600 focus:bg-blue-50 py-3 px-2 text-xl text-gray-900 placeholder-gray-600 rounded-t-lg"
                                                         />
                                                         <button
                                                             onClick={() => removeFoodEntry(entry.temp_id!)}
-                                                            className="text-gray-400 hover:text-red-500 p-3 rounded-xl hover:bg-red-50 transition-all"
+                                                            type="button"
+                                                            className="text-gray-500 hover:text-red-600 hover:bg-red-100 p-3 rounded-xl transition-all duration-200 flex-shrink-0"
                                                         >
                                                             <Trash2 size={20}/>
                                                         </button>
