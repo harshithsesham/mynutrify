@@ -51,7 +51,10 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
     const router = useRouter();
     const [entries] = useState<FoodEntry[]>(initialEntries);
     const [userRole, setUserRole] = useState<string | null>(null);
+    const [userId, setUserId] = useState<string | null>(null);
+    const [isCreator, setIsCreator] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         const fetchUserRole = async () => {
@@ -59,14 +62,29 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
             if (user) {
                 const { data: profile } = await supabase
                     .from('profiles')
-                    .select('role, full_name')
+                    .select('role, full_name, id')
                     .eq('user_id', user.id)
                     .single();
-                if (profile) setUserRole(profile.role);
+
+                if (profile) {
+                    setUserRole(profile.role);
+                    setUserId(profile.id);
+
+                    // Check if user is the creator
+                    const { data: planData } = await supabase
+                        .from('nutrition_plans')
+                        .select('created_by_id')
+                        .eq('id', plan.id)
+                        .single();
+
+                    if (planData) {
+                        setIsCreator(planData.created_by_id === profile.id);
+                    }
+                }
             }
         };
         fetchUserRole();
-    }, [supabase]);
+    }, [supabase, plan.id]);
 
     const totalMacros = entries.reduce((totals, entry) => {
         totals.calories += Number(entry.calories) || 0;
@@ -80,10 +98,41 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
     const backUrl = userRole === 'client' ? '/dashboard/my-plans' : `/dashboard/my-clients/${plan.assigned_to_id}/plans`;
 
     const handleDelete = async () => {
-        // Implement delete functionality
-        console.log('Delete plan:', plan.id);
-        // After deletion, redirect back
-        router.push(backUrl);
+        setIsDeleting(true);
+        try {
+            // Delete all entries first (due to foreign key constraint)
+            const { error: entriesError } = await supabase
+                .from('nutrition_plan_entries')
+                .delete()
+                .eq('plan_id', plan.id);
+
+            if (entriesError) {
+                console.error('Error deleting entries:', entriesError);
+                alert('Failed to delete plan entries: ' + entriesError.message);
+                setIsDeleting(false);
+                return;
+            }
+
+            // Then delete the plan
+            const { error: planError } = await supabase
+                .from('nutrition_plans')
+                .delete()
+                .eq('id', plan.id);
+
+            if (planError) {
+                console.error('Error deleting plan:', planError);
+                alert('Failed to delete plan: ' + planError.message);
+                setIsDeleting(false);
+                return;
+            }
+
+            // Success - redirect back
+            router.push(backUrl);
+        } catch (error) {
+            console.error('Delete error:', error);
+            alert('An error occurred while deleting the plan');
+            setIsDeleting(false);
+        }
     };
 
     const handleExport = () => {
@@ -136,7 +185,8 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
                                 >
                                     <Share2 size={20} />
                                 </button>
-                                {userRole !== 'client' && (
+                                {/* Only show edit/delete if user is the creator */}
+                                {isCreator && (
                                     <>
                                         <Link
                                             href={`/dashboard/my-plans/${plan.id}/edit`}
@@ -340,9 +390,10 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
                                 </button>
                                 <button
                                     onClick={handleDelete}
-                                    className="flex-1 py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                    disabled={isDeleting}
+                                    className="flex-1 py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed"
                                 >
-                                    Delete
+                                    {isDeleting ? 'Deleting...' : 'Delete'}
                                 </button>
                             </div>
                         </div>
