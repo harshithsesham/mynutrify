@@ -25,10 +25,9 @@ export function TimezoneDisplay({ professionalTimezone = 'UTC', clientTimezone }
                 <span className="font-medium">Timezone Information</span>
             </div>
             <div className="mt-2 space-y-1 text-blue-700">
-                <p>Professional's timezone: {professionalTimezone} ({formatTz(profTime, 'h:mm a zzz', { timeZone: professionalTimezone })})</p>
+                <p>Professional&apos;s timezone: {professionalTimezone} ({formatTz(profTime, 'h:mm a zzz', { timeZone: professionalTimezone })})</p>
                 <p>Your timezone: {userTimezone} ({format(now, 'h:mm a')})</p>
             </div>
         </div>
     );
 }
-

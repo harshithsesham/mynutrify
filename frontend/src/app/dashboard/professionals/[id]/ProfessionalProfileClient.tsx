@@ -6,6 +6,7 @@ import { useEffect, useState, useMemo, FC } from 'react';
 import { Star, MessageSquare, Clock, ChevronLeft, ChevronRight, X, CheckCircle, AlertCircle, Calendar } from 'lucide-react';
 import { format, addMonths, subMonths, getDay, parseISO, set, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isBefore, startOfToday, startOfWeek, endOfWeek, addHours, isAfter } from 'date-fns';
 import { useRouter } from 'next/navigation';
+import { TimezoneDisplay } from '@/app/dashboard/components/TimezoneDisplay';
 
 // --- TYPE DEFINITIONS ---
 type ProfessionalProfile = {
@@ -46,7 +47,7 @@ const SuccessModal: FC<{
     isFirstConsult: boolean;
     hourlyRate?: number | null;
     onFinalClose: () => void;
-}> = ({ onClose, professionalName, appointmentTime, isFirstConsult, hourlyRate, onFinalClose }) => {
+}> = ({ professionalName, appointmentTime, isFirstConsult, hourlyRate, onFinalClose }) => {
     const router = useRouter();
 
     // Optional: Play success sound
@@ -55,7 +56,7 @@ const SuccessModal: FC<{
             const audio = new Audio('/sounds/success.mp3');
             audio.volume = 0.3;
             audio.play().catch(() => {}); // Ignore errors if sound fails
-        } catch (error) {
+        } catch {
             // Ignore sound errors
         }
     }, []);
@@ -229,7 +230,6 @@ const BookingModal: FC<{
             daysInMonth.forEach(day => {
                 if (getDay(day) === avail.day_of_week && !isBefore(day, today)) {
                     // Check if any time slot on this day would be after minBookableTime
-                    const dayStart = set(day, { hours: parseInt(avail.start_time.split(':')[0]), minutes: 0, seconds: 0, milliseconds: 0 });
                     const dayEnd = set(day, { hours: parseInt(avail.end_time.split(':')[0]) - 1, minutes: 59, seconds: 59, milliseconds: 999 });
 
                     if (isAfter(dayEnd, minBookableTime)) {
@@ -563,19 +563,9 @@ const BookingModal: FC<{
                             </ul>
                         </div>
 
-                        {/* Timezone Information */}
-                        {professional.timezone && professional.timezone !== Intl.DateTimeFormat().resolvedOptions().timeZone && (
-                            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-                                <div className="flex items-center gap-2 text-amber-800">
-                                    <Clock size={16} />
-                                    <span className="font-medium">Timezone Information</span>
-                                </div>
-                                <div className="mt-2 space-y-1 text-amber-700">
-                                    <p>Professional's timezone: {professional.timezone}</p>
-                                    <p>Your timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
-                                    <p className="text-xs mt-1">Times shown are in your local timezone</p>
-                                </div>
-                            </div>
+                        {/* Timezone Information Component */}
+                        {professional.timezone && (
+                            <TimezoneDisplay professionalTimezone={professional.timezone} />
                         )}
                     </div>
 
