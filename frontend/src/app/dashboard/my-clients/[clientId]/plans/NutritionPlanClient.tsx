@@ -3,7 +3,7 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useCallback, useEffect, useState } from 'react';
-import { Calendar, Trash2, Flame, Drumstick, Wheat, Droplets, PlusCircle, FileText } from 'lucide-react';
+import { Calendar, Trash2, Flame, Drumstick, Wheat, Droplets, PlusCircle, FileText, Save } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 
@@ -81,77 +81,319 @@ export default function NutritionPlanClient({ clientId }: { clientId: string }) 
         // Refresh plans list
         const { data: plansData } = await supabase.from('nutrition_plans').select(`id, title, created_at, creator:created_by_id(full_name)`).eq('assigned_to_id', clientId).order('created_at', { ascending: false });
         setExistingPlans((plansData as unknown as Plan[]) || []);
+
+        // Reset form
+        setPlanTitle('New Nutrition Plan');
+        setFoodEntries([]);
     };
 
     return (
-        <div className="text-gray-800">
-            <h1 className="text-3xl font-bold">Nutrition Plans for {client?.full_name || '...'}</h1>
-
-            <div className="flex border-b border-gray-200 mt-8 mb-8">
-                <button onClick={() => setActiveTab('view')} className={`py-3 px-6 font-semibold ${activeTab === 'view' ? 'border-b-2 border-gray-800 text-gray-800' : 'text-gray-500'}`}>View Existing Plans</button>
-                <button onClick={() => setActiveTab('create')} className={`py-3 px-6 font-semibold ${activeTab === 'create' ? 'border-b-2 border-gray-800 text-gray-800' : 'text-gray-500'}`}>Create New Plan</button>
+        <div className="text-gray-800 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="mb-6 sm:mb-8">
+                <h1 className="text-2xl sm:text-3xl font-bold mb-2">
+                    Nutrition Plans for {client?.full_name || '...'}
+                </h1>
             </div>
 
+            {/* Tab Navigation */}
+            <div className="flex border-b border-gray-200 mb-6 sm:mb-8">
+                <button
+                    onClick={() => setActiveTab('view')}
+                    className={`py-3 px-4 sm:px-6 font-semibold text-sm sm:text-base ${
+                        activeTab === 'view'
+                            ? 'border-b-2 border-gray-800 text-gray-800'
+                            : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                    View Existing Plans
+                </button>
+                <button
+                    onClick={() => setActiveTab('create')}
+                    className={`py-3 px-4 sm:px-6 font-semibold text-sm sm:text-base ${
+                        activeTab === 'create'
+                            ? 'border-b-2 border-gray-800 text-gray-800'
+                            : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                    Create New Plan
+                </button>
+            </div>
+
+            {/* View Existing Plans Tab */}
             {activeTab === 'view' && (
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                     {existingPlans.length > 0 ? (
                         existingPlans.map((plan) => (
-                            <Link href={`/dashboard/my-plans/${plan.id}`} key={plan.id} className="block bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                                <div className="flex items-center gap-4">
-                                    <FileText size={32} className="text-gray-400" />
-                                    <div>
-                                        <p className="font-semibold text-lg">{plan.title}</p>
-                                        <p className="text-sm text-gray-500">Created by {plan.creator?.full_name || 'Unknown'} on {format(new Date(plan.created_at), 'dd MMM yyyy')}</p>
+                            <Link
+                                href={`/dashboard/my-plans/${plan.id}`}
+                                key={plan.id}
+                                className="block bg-white p-4 sm:p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                            >
+                                <div className="flex items-center gap-3 sm:gap-4">
+                                    <FileText size={28} className="text-gray-400 flex-shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-semibold text-base sm:text-lg truncate">{plan.title}</p>
+                                        <p className="text-xs sm:text-sm text-gray-500">
+                                            Created by {plan.creator?.full_name || 'Unknown'} on {format(new Date(plan.created_at), 'dd MMM yyyy')}
+                                        </p>
                                     </div>
                                 </div>
                             </Link>
                         ))
                     ) : (
-                        <div className="text-center text-gray-500 py-12 bg-gray-50 rounded-2xl border border-gray-200">
-                            <h2 className="text-2xl font-bold mb-2">No Plans Yet</h2>
-                            <p>Create a new plan for this client in the tab above.</p>
+                        <div className="text-center text-gray-500 py-8 sm:py-12 bg-gray-50 rounded-2xl border border-gray-200">
+                            <FileText size={48} className="mx-auto text-gray-300 mb-4" />
+                            <h2 className="text-xl sm:text-2xl font-bold mb-2">No Plans Yet</h2>
+                            <p className="text-sm sm:text-base">Create a new plan for this client in the tab above.</p>
                         </div>
                     )}
                 </div>
             )}
 
+            {/* Create New Plan Tab */}
             {activeTab === 'create' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left Side: Diet Plan */}
-                    <div className="lg:col-span-2 bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                        <input type="text" value={planTitle} onChange={(e) => setPlanTitle(e.target.value)} className="text-2xl font-bold w-full mb-6 bg-transparent focus:outline-none border-b border-gray-300 focus:border-gray-800"/>
-                        {['Breakfast', 'Lunch', 'Snacks', 'Dinner'].map(mealType => (
-                            <div key={mealType} className="mb-6 border-b border-gray-200 pb-6 last:border-b-0">
-                                <h3 className="text-xl font-semibold mb-4">{mealType}</h3>
-                                {foodEntries.filter(e => e.meal_type === mealType).map(entry => (
-                                    <div key={entry.id} className="grid grid-cols-6 gap-2 items-center mb-2">
-                                        <input type="text" value={entry.food_name} onChange={e => updateFoodEntry(entry.id, 'food_name', e.target.value)} placeholder="Food Name" className="col-span-2 bg-gray-50 border border-gray-300 rounded-lg px-3 py-2"/>
-                                        <input type="number" value={entry.quantity_grams} onChange={e => updateFoodEntry(entry.id, 'quantity_grams', parseInt(e.target.value))} placeholder="g" className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2"/>
-                                        <input type="number" value={entry.calories} onChange={e => updateFoodEntry(entry.id, 'calories', parseInt(e.target.value))} placeholder="kcal" className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2"/>
-                                        <input type="number" value={entry.protein} onChange={e => updateFoodEntry(entry.id, 'protein', parseInt(e.target.value))} placeholder="p" className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2"/>
-                                        <button onClick={() => removeFoodEntry(entry.id)} className="text-gray-400 hover:text-red-500"><Trash2 size={20}/></button>
-                                    </div>
-                                ))}
-                                <button onClick={() => addFoodEntry(mealType as FoodEntry['meal_type'])} className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold mt-4">
-                                    <PlusCircle size={20}/> Add Food
-                                </button>
-                            </div>
-                        ))}
+                <div className="space-y-6">
+                    {/* Mobile Save Button - Top */}
+                    <div className="sm:hidden">
+                        <button
+                            onClick={handleSavePlan}
+                            disabled={isSaving}
+                            className="w-full bg-gray-800 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-700 disabled:bg-gray-400 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Save size={20} />
+                            {isSaving ? 'Saving Plan...' : 'Save Plan'}
+                        </button>
                     </div>
 
-                    {/* Right Side: Macros */}
-                    <div className="lg:col-span-1 bg-white p-8 rounded-2xl border border-gray-200 shadow-sm self-start">
-                        <h3 className="text-xl font-semibold mb-6">Total Macros</h3>
-                        <div className="relative w-48 h-48 mx-auto mb-6">
-                            <svg className="w-full h-full" viewBox="0 0 36 36"><path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#eee" strokeWidth="3" /><path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#4ade80" strokeWidth="3" strokeDasharray={`${(consumedMacros.calories / targetMacros.calories) * 100}, 100`} /></svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center"><p className="text-3xl font-bold">{consumedMacros.calories}</p><p className="text-gray-500">kcal</p></div>
+                    {/* Desktop Save Button */}
+                    <div className="hidden sm:flex justify-end">
+                        <button
+                            onClick={handleSavePlan}
+                            disabled={isSaving}
+                            className="bg-gray-800 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-700 disabled:bg-gray-400 transition-colors flex items-center gap-2"
+                        >
+                            <Save size={18} />
+                            {isSaving ? 'Saving...' : 'Save Plan'}
+                        </button>
+                    </div>
+
+                    {/* Main Content Grid */}
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
+                        {/* Left Side: Diet Plan */}
+                        <div className="xl:col-span-2 bg-white p-4 sm:p-6 lg:p-8 rounded-2xl border border-gray-200 shadow-sm">
+                            {/* Plan Title Input */}
+                            <input
+                                type="text"
+                                value={planTitle}
+                                onChange={(e) => setPlanTitle(e.target.value)}
+                                className="text-xl sm:text-2xl font-bold w-full mb-6 bg-transparent focus:outline-none border-b border-gray-300 focus:border-gray-800 py-2"
+                                placeholder="Enter plan title..."
+                            />
+
+                            {/* Meal Sections */}
+                            {['Breakfast', 'Lunch', 'Snacks', 'Dinner'].map(mealType => (
+                                <div key={mealType} className="mb-8 border-b border-gray-200 pb-6 last:border-b-0 last:mb-0">
+                                    <h3 className="text-lg sm:text-xl font-semibold mb-4 text-gray-700">{mealType}</h3>
+
+                                    {/* Food Entries */}
+                                    <div className="space-y-3">
+                                        {foodEntries.filter(e => e.meal_type === mealType).map(entry => (
+                                            <div key={entry.id} className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                                {/* Mobile Layout */}
+                                                <div className="sm:hidden space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <input
+                                                            type="text"
+                                                            value={entry.food_name}
+                                                            onChange={e => updateFoodEntry(entry.id, 'food_name', e.target.value)}
+                                                            placeholder="Food Name"
+                                                            className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                                        />
+                                                        <button
+                                                            onClick={() => removeFoodEntry(entry.id)}
+                                                            className="text-gray-400 hover:text-red-500 ml-3 p-1"
+                                                        >
+                                                            <Trash2 size={18}/>
+                                                        </button>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="block text-xs text-gray-500 mb-1">Weight (g)</label>
+                                                            <input
+                                                                type="number"
+                                                                value={entry.quantity_grams}
+                                                                onChange={e => updateFoodEntry(entry.id, 'quantity_grams', parseInt(e.target.value) || 0)}
+                                                                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs text-gray-500 mb-1">Calories</label>
+                                                            <input
+                                                                type="number"
+                                                                value={entry.calories}
+                                                                onChange={e => updateFoodEntry(entry.id, 'calories', parseInt(e.target.value) || 0)}
+                                                                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <div>
+                                                            <label className="block text-xs text-gray-500 mb-1">Protein (g)</label>
+                                                            <input
+                                                                type="number"
+                                                                value={entry.protein}
+                                                                onChange={e => updateFoodEntry(entry.id, 'protein', parseInt(e.target.value) || 0)}
+                                                                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs text-gray-500 mb-1">Carbs (g)</label>
+                                                            <input
+                                                                type="number"
+                                                                value={entry.carbs}
+                                                                onChange={e => updateFoodEntry(entry.id, 'carbs', parseInt(e.target.value) || 0)}
+                                                                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs text-gray-500 mb-1">Fats (g)</label>
+                                                            <input
+                                                                type="number"
+                                                                value={entry.fats}
+                                                                onChange={e => updateFoodEntry(entry.id, 'fats', parseInt(e.target.value) || 0)}
+                                                                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Desktop Layout */}
+                                                <div className="hidden sm:grid sm:grid-cols-6 gap-3 items-center">
+                                                    <input
+                                                        type="text"
+                                                        value={entry.food_name}
+                                                        onChange={e => updateFoodEntry(entry.id, 'food_name', e.target.value)}
+                                                        placeholder="Food Name"
+                                                        className="col-span-2 bg-white border border-gray-300 rounded-lg px-3 py-2"
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        value={entry.quantity_grams}
+                                                        onChange={e => updateFoodEntry(entry.id, 'quantity_grams', parseInt(e.target.value) || 0)}
+                                                        placeholder="g"
+                                                        className="bg-white border border-gray-300 rounded-lg px-3 py-2"
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        value={entry.calories}
+                                                        onChange={e => updateFoodEntry(entry.id, 'calories', parseInt(e.target.value) || 0)}
+                                                        placeholder="kcal"
+                                                        className="bg-white border border-gray-300 rounded-lg px-3 py-2"
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        value={entry.protein}
+                                                        onChange={e => updateFoodEntry(entry.id, 'protein', parseInt(e.target.value) || 0)}
+                                                        placeholder="p"
+                                                        className="bg-white border border-gray-300 rounded-lg px-3 py-2"
+                                                    />
+                                                    <button
+                                                        onClick={() => removeFoodEntry(entry.id)}
+                                                        className="text-gray-400 hover:text-red-500 justify-self-center"
+                                                    >
+                                                        <Trash2 size={20}/>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Add Food Button */}
+                                    <button
+                                        onClick={() => addFoodEntry(mealType as FoodEntry['meal_type'])}
+                                        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold mt-4 transition-colors"
+                                    >
+                                        <PlusCircle size={20}/> Add Food
+                                    </button>
+                                </div>
+                            ))}
                         </div>
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center"><div className="flex items-center gap-3"><Flame size={20} className="text-orange-500" /><span className="font-medium">Calories</span></div><span className="text-gray-500">{consumedMacros.calories} / {targetMacros.calories} kcal</span></div>
-                            <div className="flex justify-between items-center"><div className="flex items-center gap-3"><Drumstick size={20} className="text-red-500" /><span className="font-medium">Protein</span></div><span className="text-gray-500">{consumedMacros.protein} / {targetMacros.protein} gm</span></div>
-                            <div className="flex justify-between items-center"><div className="flex items-center gap-3"><Wheat size={20} className="text-yellow-500" /><span className="font-medium">Carbs</span></div><span className="text-gray-500">{consumedMacros.carbs} / {targetMacros.carbs} gm</span></div>
-                            <div className="flex justify-between items-center"><div className="flex items-center gap-3"><Droplets size={20} className="text-blue-500" /><span className="font-medium">Fats</span></div><span className="text-gray-500">{consumedMacros.fats} / {targetMacros.fats} gm</span></div>
+
+                        {/* Right Side: Macros */}
+                        <div className="xl:col-span-1 bg-white p-4 sm:p-6 lg:p-8 rounded-2xl border border-gray-200 shadow-sm h-fit">
+                            <h3 className="text-lg sm:text-xl font-semibold mb-6">Total Macros</h3>
+
+                            {/* Circular Progress */}
+                            <div className="relative w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 mx-auto mb-6">
+                                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                    {/* Background circle */}
+                                    <path
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                        fill="none"
+                                        stroke="#eee"
+                                        strokeWidth="3"
+                                    />
+                                    {/* Progress circle */}
+                                    <path
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                        fill="none"
+                                        stroke="#4ade80"
+                                        strokeWidth="3"
+                                        strokeDasharray={`${Math.min((consumedMacros.calories / targetMacros.calories) * 100, 100)}, 100`}
+                                        className="transition-all duration-300"
+                                    />
+                                </svg>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                    <p className="text-2xl sm:text-3xl font-bold">{consumedMacros.calories}</p>
+                                    <p className="text-gray-500 text-sm">kcal</p>
+                                </div>
+                            </div>
+
+                            {/* Macro Breakdown */}
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-3">
+                                        <Flame size={18} className="text-orange-500" />
+                                        <span className="font-medium text-sm sm:text-base">Calories</span>
+                                    </div>
+                                    <span className="text-gray-500 text-sm">{consumedMacros.calories} / {targetMacros.calories} kcal</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-3">
+                                        <Drumstick size={18} className="text-red-500" />
+                                        <span className="font-medium text-sm sm:text-base">Protein</span>
+                                    </div>
+                                    <span className="text-gray-500 text-sm">{consumedMacros.protein} / {targetMacros.protein} g</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-3">
+                                        <Wheat size={18} className="text-yellow-500" />
+                                        <span className="font-medium text-sm sm:text-base">Carbs</span>
+                                    </div>
+                                    <span className="text-gray-500 text-sm">{consumedMacros.carbs} / {targetMacros.carbs} g</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-3">
+                                        <Droplets size={18} className="text-blue-500" />
+                                        <span className="font-medium text-sm sm:text-base">Fats</span>
+                                    </div>
+                                    <span className="text-gray-500 text-sm">{consumedMacros.fats} / {targetMacros.fats} g</span>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+
+                    {/* Mobile Save Button - Bottom */}
+                    <div className="sm:hidden">
+                        <button
+                            onClick={handleSavePlan}
+                            disabled={isSaving}
+                            className="w-full bg-gray-800 text-white font-bold py-4 px-6 rounded-lg hover:bg-gray-700 disabled:bg-gray-400 transition-colors flex items-center justify-center gap-2 text-lg"
+                        >
+                            <Save size={22} />
+                            {isSaving ? 'Saving Plan...' : 'Save Plan'}
+                        </button>
                     </div>
                 </div>
             )}
