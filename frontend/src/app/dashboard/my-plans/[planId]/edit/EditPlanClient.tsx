@@ -190,8 +190,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                     target_calories: Number(targetMacros.calories),
                     target_protein: Number(targetMacros.protein),
                     target_carbs: Number(targetMacros.carbs),
-                    target_fats: Number(targetMacros.fats),
-                    updated_at: new Date().toISOString()
+                    target_fats: Number(targetMacros.fats)
                 })
                 .eq('id', plan.id);
 
@@ -344,7 +343,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.calories}
                                         onChange={(e) => setTargetMacros({...targetMacros, calories: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-semibold"
+                                        className="w-full bg-white border-2 border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
                                     />
                                 </div>
                                 <div>
@@ -353,7 +352,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.protein}
                                         onChange={(e) => setTargetMacros({...targetMacros, protein: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-semibold"
+                                        className="w-full bg-white border-2 border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
                                     />
                                 </div>
                                 <div>
@@ -362,7 +361,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.carbs}
                                         onChange={(e) => setTargetMacros({...targetMacros, carbs: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-semibold"
+                                        className="w-full bg-white border-2 border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
                                     />
                                 </div>
                                 <div>
@@ -371,7 +370,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.fats}
                                         onChange={(e) => setTargetMacros({...targetMacros, fats: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-semibold"
+                                        className="w-full bg-white border-2 border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold text-gray-900"
                                     />
                                 </div>
                             </div>
@@ -435,7 +434,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                                             value={entry.food_name}
                                                             onChange={e => updateFoodEntry(entry.temp_id!, 'food_name', e.target.value)}
                                                             placeholder="Enter food name..."
-                                                            className="flex-1 font-bold bg-transparent border-b-2 border-gray-300 focus:outline-none focus:border-blue-500 py-3 text-xl"
+                                                            className="flex-1 font-bold bg-transparent border-b-2 border-gray-400 focus:outline-none focus:border-blue-600 py-3 text-xl text-gray-900 placeholder-gray-500"
                                                         />
                                                         <button
                                                             onClick={() => removeFoodEntry(entry.temp_id!)}
@@ -447,60 +446,60 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
 
                                                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                                                         <div>
-                                                            <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">Quantity</label>
+                                                            <label className="block text-sm font-bold text-gray-800 mb-2 uppercase tracking-wide">Quantity</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="number"
                                                                     value={entry.quantity_grams}
                                                                     onChange={e => updateFoodEntry(entry.temp_id!, 'quantity_grams', parseInt(e.target.value) || 0)}
-                                                                    className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-3 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-semibold"
+                                                                    className="w-full bg-gray-100 border-2 border-gray-300 rounded-xl px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold text-gray-900 text-lg"
                                                                 />
-                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">g</span>
+                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-700">g</span>
                                                             </div>
                                                         </div>
                                                         <div>
-                                                            <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">Calories</label>
+                                                            <label className="block text-sm font-bold text-gray-800 mb-2 uppercase tracking-wide">Calories</label>
                                                             <input
                                                                 type="number"
                                                                 value={entry.calories}
                                                                 onChange={e => updateFoodEntry(entry.temp_id!, 'calories', parseInt(e.target.value) || 0)}
-                                                                className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-semibold"
+                                                                className="w-full bg-gray-100 border-2 border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold text-gray-900 text-lg"
                                                             />
                                                         </div>
                                                         <div>
-                                                            <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">Protein</label>
+                                                            <label className="block text-sm font-bold text-gray-800 mb-2 uppercase tracking-wide">Protein</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="number"
                                                                     value={entry.protein}
                                                                     onChange={e => updateFoodEntry(entry.temp_id!, 'protein', parseInt(e.target.value) || 0)}
-                                                                    className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-3 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-semibold"
+                                                                    className="w-full bg-gray-100 border-2 border-gray-300 rounded-xl px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold text-gray-900 text-lg"
                                                                 />
-                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">g</span>
+                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-700">g</span>
                                                             </div>
                                                         </div>
                                                         <div>
-                                                            <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">Carbs</label>
+                                                            <label className="block text-sm font-bold text-gray-800 mb-2 uppercase tracking-wide">Carbs</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="number"
                                                                     value={entry.carbs}
                                                                     onChange={e => updateFoodEntry(entry.temp_id!, 'carbs', parseInt(e.target.value) || 0)}
-                                                                    className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-3 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-semibold"
+                                                                    className="w-full bg-gray-100 border-2 border-gray-300 rounded-xl px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold text-gray-900 text-lg"
                                                                 />
-                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">g</span>
+                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-700">g</span>
                                                             </div>
                                                         </div>
                                                         <div>
-                                                            <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">Fats</label>
+                                                            <label className="block text-sm font-bold text-gray-800 mb-2 uppercase tracking-wide">Fats</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="number"
                                                                     value={entry.fats}
                                                                     onChange={e => updateFoodEntry(entry.temp_id!, 'fats', parseInt(e.target.value) || 0)}
-                                                                    className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-3 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-semibold"
+                                                                    className="w-full bg-gray-100 border-2 border-gray-300 rounded-xl px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold text-gray-900 text-lg"
                                                                 />
-                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">g</span>
+                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-700">g</span>
                                                             </div>
                                                         </div>
                                                     </div>
