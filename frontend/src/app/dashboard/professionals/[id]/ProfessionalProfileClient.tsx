@@ -5,6 +5,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useEffect, useState, useMemo, FC } from 'react';
 import { Star, MessageSquare, Clock, ChevronLeft, ChevronRight, X, CheckCircle, AlertCircle, Calendar } from 'lucide-react';
 import { format, addMonths, subMonths, getDay, parseISO, set, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isBefore, startOfToday, startOfWeek, endOfWeek, addHours, isAfter } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 // --- TYPE DEFINITIONS ---
 type ProfessionalProfile = {
@@ -36,39 +37,139 @@ type Review = {
     client: { full_name: string };
 };
 
-// --- SUCCESS MODAL ---
+// --- ENHANCED SUCCESS MODAL ---
 const SuccessModal: FC<{
     onClose: () => void;
     professionalName: string;
     appointmentTime: Date;
     isFirstConsult: boolean;
-}> = ({ onClose, professionalName, appointmentTime, isFirstConsult }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full shadow-lg text-center">
-            <CheckCircle size={56} className="text-green-500 mx-auto mb-4" />
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">Appointment Booked!</h2>
-            <div className="space-y-2 mb-4">
-                <p className="text-sm text-gray-600">
-                    Your appointment with <span className="font-semibold">{professionalName}</span> is confirmed for:
+    hourlyRate?: number | null;
+}> = ({ onClose, professionalName, appointmentTime, isFirstConsult, hourlyRate }) => {
+    const router = useRouter();
+
+    // Optional: Play success sound
+    useEffect(() => {
+        try {
+            const audio = new Audio('/sounds/success.mp3');
+            audio.volume = 0.3;
+            audio.play().catch(() => {}); // Ignore errors if sound fails
+        } catch (error) {
+            // Ignore sound errors
+        }
+    }, []);
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+            <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl text-center transform animate-slideUp">
+                {/* Success Animation */}
+                <div className="relative mb-6">
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                        <CheckCircle size={48} className="text-green-500" />
+                    </div>
+                    {/* Celebration Emojis */}
+                    <div className="absolute -top-2 -left-2 text-2xl animate-pulse">🎉</div>
+                    <div className="absolute -top-2 -right-2 text-2xl animate-pulse delay-200">✨</div>
+                </div>
+
+                {/* Success Message */}
+                <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-3">
+                    Booking Confirmed!
+                </h2>
+
+                <p className="text-gray-600 mb-6">
+                    Great news! Your appointment has been successfully booked.
                 </p>
-                <p className="font-semibold text-gray-800">
-                    {format(appointmentTime, 'PPP')} at {format(appointmentTime, 'p')}
-                </p>
+
+                {/* Appointment Details Card */}
+                <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left">
+                    <h3 className="font-semibold text-gray-800 mb-3 text-center">Appointment Details</h3>
+
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                <MessageSquare size={16} className="text-blue-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-500">Coach</p>
+                                <p className="font-medium text-gray-800">{professionalName}</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                                <Calendar size={16} className="text-purple-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-500">Date & Time</p>
+                                <p className="font-medium text-gray-800">
+                                    {format(appointmentTime, 'EEEE, MMMM do, yyyy')}
+                                </p>
+                                <p className="font-medium text-gray-800">
+                                    {format(appointmentTime, 'h:mm a')} - {format(new Date(appointmentTime.getTime() + 60 * 60 * 1000), 'h:mm a')}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                <CheckCircle size={16} className="text-green-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-500">Price</p>
+                                <p className="font-medium text-green-600">
+                                    {isFirstConsult ? 'FREE (First Consultation)' : `₹${hourlyRate || 0}`}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Special First Consultation Badge */}
                 {isFirstConsult && (
-                    <p className="text-sm text-green-600 font-medium">
-                        🎉 This is your first consultation - it&apos;s FREE!
-                    </p>
+                    <div className="bg-gradient-to-r from-green-400 to-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium mb-6 inline-block">
+                        🎉 First Consultation - Completely FREE!
+                    </div>
                 )}
+
+                {/* Next Steps */}
+                <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                    <h4 className="font-semibold text-blue-800 mb-2">What&apos;s Next?</h4>
+                    <div className="text-sm text-blue-700 space-y-1 text-left">
+                        <p>✅ Google Meet link has been created</p>
+                        <p>✅ Check your &quot;My Appointments&quot; section</p>
+                        <p>✅ You&apos;ll receive a confirmation email</p>
+                        <p>✅ Join the meeting 5 minutes early</p>
+                    </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-3">
+                    <button
+                        onClick={() => {
+                            onClose();
+                            router.push('/dashboard/my-appointments');
+                        }}
+                        className="w-full bg-gray-800 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-700 transition-colors transform hover:scale-105"
+                    >
+                        View My Appointments
+                    </button>
+
+                    <button
+                        onClick={onClose}
+                        className="w-full bg-gray-100 text-gray-700 font-medium py-2 px-6 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                        Continue Browsing
+                    </button>
+                </div>
+
+                {/* Appreciation Message */}
+                <p className="text-xs text-gray-500 mt-4">
+                    Thank you for choosing our platform! We&apos;re excited to help you on your wellness journey. 💪
+                </p>
             </div>
-            <p className="text-xs text-gray-500 mb-6">
-                A Google Meet link has been created and will be available in your &quot;My Appointments&quot; section.
-            </p>
-            <button onClick={onClose} className="w-full bg-gray-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700">
-                Done
-            </button>
         </div>
-    </div>
-);
+    );
+};
 
 // --- ERROR MODAL ---
 const ErrorModal: FC<{
@@ -76,8 +177,8 @@ const ErrorModal: FC<{
     title: string;
     message: string;
 }> = ({ onClose, title, message }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full shadow-lg text-center">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+        <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full shadow-lg text-center transform animate-slideUp">
             <AlertCircle size={56} className="text-red-500 mx-auto mb-4" />
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">{title}</h2>
             <p className="text-sm sm:text-base text-gray-600 mb-6">{message}</p>
@@ -305,6 +406,7 @@ const BookingModal: FC<{
             professionalName={professional.full_name}
             appointmentTime={bookingSuccessData.time}
             isFirstConsult={bookingSuccessData.isFirstConsult}
+            hourlyRate={professional.hourly_rate}
         />;
     }
 
