@@ -383,9 +383,8 @@ const BookingModal: FC<{
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     professionalId: professional.id,
-                    // Send as ISO string (automatically converts to UTC)
-                    selectedDate: localStartTime.toISOString(),
-                    selectedSlot: selectedSlot,
+                    startTime: localStartTime.toISOString(),
+                    endTime: localEndTime.toISOString(),
                 }),
             });
 

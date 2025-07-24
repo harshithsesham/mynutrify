@@ -35,15 +35,21 @@ export async function POST(req: NextRequest) {
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         const requestId = `nutrify-${appointmentId}-${Date.now()}`;
 
-        // 3. Insert the event with the corrected summary
+        // 3. Insert the event - let Google Calendar handle timezone conversion
         const insertResp = await calendar.events.insert({
             calendarId: 'primary',
             conferenceDataVersion: 1,
             requestBody: {
-                summary: `Consultation with ${professionalProfile.full_name}`, // This is the corrected event title
+                summary: `Consultation with ${professionalProfile.full_name}`,
                 description: `Nutrition consultation booked via Nutrify.`,
-                start: { dateTime: startTime, timeZone: 'Asia/Kolkata' },
-                end:   { dateTime: endTime,   timeZone: 'Asia/Kolkata' },
+                start: {
+                    dateTime: startTime,  // UTC time, Google will convert to calendar owner's timezone
+                    // Don't specify timezone - let Google use the calendar's default
+                },
+                end: {
+                    dateTime: endTime,    // UTC time, Google will convert to calendar owner's timezone
+                    // Don't specify timezone - let Google use the calendar's default
+                },
                 attendees: [{ email: clientEmail }],
                 conferenceData: {
                     createRequest: {

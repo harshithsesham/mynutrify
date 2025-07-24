@@ -2,7 +2,7 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { addHours, isAfter, parseISO, set } from 'date-fns';
+import { addHours, isAfter, parseISO } from 'date-fns';
 
 export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies });
@@ -10,12 +10,12 @@ export async function POST(req: NextRequest) {
     try {
         const {
             professionalId,
-            selectedDate,
-            selectedSlot
+            startTime,    // Now expecting ISO string in UTC
+            endTime       // Now expecting ISO string in UTC
         } = await req.json();
 
         // Validate input
-        if (!professionalId || !selectedDate || !selectedSlot) {
+        if (!professionalId || !startTime || !endTime) {
             return NextResponse.json({
                 error: 'Missing required fields'
             }, { status: 400 });
@@ -42,16 +42,9 @@ export async function POST(req: NextRequest) {
             }, { status: 404 });
         }
 
-        // Parse appointment time
-        const appointmentDate = new Date(selectedDate);
-        const [hour] = selectedSlot.split(':').map(Number);
-        const appointmentStartTime = set(appointmentDate, {
-            hours: hour,
-            minutes: 0,
-            seconds: 0,
-            milliseconds: 0
-        });
-        const appointmentEndTime = set(appointmentStartTime, { hours: hour + 1 });
+        // Parse appointment times - they're already in UTC
+        const appointmentStartTime = parseISO(startTime);
+        const appointmentEndTime = parseISO(endTime);
 
         // Validation 1: Check if appointment is at least 1 hour in future
         const minBookableTime = addHours(new Date(), 1);
@@ -62,7 +55,11 @@ export async function POST(req: NextRequest) {
         }
 
         // Validation 2: Check professional availability
-        const dayOfWeek = appointmentDate.getDay();
+        // Note: getDay() and getHours() will return values in the server's timezone
+        // This is okay as long as availability is also stored in the same timezone
+        const dayOfWeek = appointmentStartTime.getDay();
+        const hour = appointmentStartTime.getHours();
+
         const { data: availability, error: availError } = await supabase
             .from('availability')
             .select('start_time, end_time')
@@ -91,8 +88,8 @@ export async function POST(req: NextRequest) {
             .select('id')
             .eq('professional_id', professionalId)
             .eq('status', 'confirmed')
-            .gte('start_time', appointmentStartTime.toISOString())
-            .lt('start_time', appointmentEndTime.toISOString())
+            .gte('start_time', startTime)
+            .lt('start_time', endTime)
             .maybeSingle();
 
         if (conflictError) {
@@ -145,8 +142,8 @@ export async function POST(req: NextRequest) {
             .insert({
                 client_id: clientProfile.id,
                 professional_id: professionalId,
-                start_time: appointmentStartTime.toISOString(),
-                end_time: appointmentEndTime.toISOString(),
+                start_time: startTime,  // Already in UTC ISO format
+                end_time: endTime,      // Already in UTC ISO format
                 price: price,
                 is_first_consult: isFirstConsult,
                 status: 'confirmed',
