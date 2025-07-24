@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Calendar, Flame, Drumstick, Wheat, Droplets, ChevronLeft, Clock, User, Download, Share2, Edit, Trash2 } from 'lucide-react';
+import { Calendar, Flame, Drumstick, Wheat, Droplets, ChevronLeft, Clock, User, Download, Share2, Edit, Trash2, X, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -100,6 +100,8 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
     const handleDelete = async () => {
         setIsDeleting(true);
         try {
+            console.log('Starting delete process for plan:', plan.id);
+
             // Delete all entries first (due to foreign key constraint)
             const { error: entriesError } = await supabase
                 .from('nutrition_plan_entries')
@@ -108,10 +110,10 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
 
             if (entriesError) {
                 console.error('Error deleting entries:', entriesError);
-                alert('Failed to delete plan entries: ' + entriesError.message);
-                setIsDeleting(false);
-                return;
+                throw new Error(`Failed to delete plan entries: ${entriesError.message}`);
             }
+
+            console.log('Entries deleted successfully');
 
             // Then delete the plan
             const { error: planError } = await supabase
@@ -121,17 +123,21 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
 
             if (planError) {
                 console.error('Error deleting plan:', planError);
-                alert('Failed to delete plan: ' + planError.message);
-                setIsDeleting(false);
-                return;
+                throw new Error(`Failed to delete plan: ${planError.message}`);
             }
+
+            console.log('Plan deleted successfully');
 
             // Success - redirect back
             router.push(backUrl);
+            router.refresh(); // Force a refresh to update the plans list
+
         } catch (error) {
             console.error('Delete error:', error);
-            alert('An error occurred while deleting the plan');
+            alert(`Failed to delete plan: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
             setIsDeleting(false);
+            setShowDeleteConfirm(false);
         }
     };
 
@@ -150,10 +156,10 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
                         Back to Plans
                     </Link>
 
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8">
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8 shadow-sm">
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                             <div className="flex-1">
-                                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">{plan.title}</h1>
+                                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{plan.title}</h1>
                                 <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                                     <span className="flex items-center gap-2">
                                         <User size={16} />
@@ -174,13 +180,13 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={handleExport}
-                                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                                    className="p-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-colors"
                                     title="Export Plan"
                                 >
                                     <Download size={20} />
                                 </button>
                                 <button
-                                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                                    className="p-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-colors"
                                     title="Share Plan"
                                 >
                                     <Share2 size={20} />
@@ -190,14 +196,19 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
                                     <>
                                         <Link
                                             href={`/dashboard/my-plans/${plan.id}/edit`}
-                                            className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                                            className="p-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-colors"
                                             title="Edit Plan"
                                         >
                                             <Edit size={20} />
                                         </Link>
                                         <button
-                                            onClick={() => setShowDeleteConfirm(true)}
-                                            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setShowDeleteConfirm(true);
+                                            }}
+                                            type="button"
+                                            className="p-3 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors"
                                             title="Delete Plan"
                                         >
                                             <Trash2 size={20} />
@@ -220,24 +231,24 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
                             const mealCalories = mealEntries.reduce((sum, e) => sum + e.calories, 0);
 
                             return (
-                                <div key={mealType} className={`bg-white rounded-xl border p-6 ${config.color}`}>
+                                <div key={mealType} className={`bg-white rounded-xl border p-6 ${config.color} shadow-sm`}>
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="text-xl font-semibold flex items-center gap-2">
                                             <span className="text-2xl">{config.icon}</span>
-                                            <span className={config.textColor}>{mealType}</span>
+                                            <span className={`${config.textColor} font-bold`}>{mealType}</span>
                                         </h3>
-                                        <span className={`font-medium ${config.textColor}`}>
+                                        <span className={`font-bold ${config.textColor} bg-white px-3 py-1 rounded-full text-sm`}>
                                             {mealCalories} kcal
                                         </span>
                                     </div>
 
                                     <div className="space-y-2">
                                         {mealEntries.map(entry => (
-                                            <div key={entry.id} className="bg-white rounded-lg p-4 flex items-center justify-between">
+                                            <div key={entry.id} className="bg-white rounded-lg p-4 flex items-center justify-between shadow-sm border border-gray-100">
                                                 <div className="flex-1">
-                                                    <p className="font-medium text-gray-800">{entry.food_name}</p>
-                                                    <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                                                        <span>{entry.quantity_grams}g</span>
+                                                    <p className="font-bold text-gray-900 text-lg">{entry.food_name}</p>
+                                                    <div className="flex items-center gap-4 mt-2 text-sm font-semibold">
+                                                        <span className="text-gray-700">{entry.quantity_grams}g</span>
                                                         <span className="text-orange-600">{entry.calories} kcal</span>
                                                         <span className="text-red-600">{entry.protein}g protein</span>
                                                         <span className="text-yellow-600">{entry.carbs}g carbs</span>
@@ -254,8 +265,8 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
 
                     {/* Right Side: Macro Summary */}
                     <div className="lg:col-span-1">
-                        <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-6">
-                            <h3 className="text-xl font-semibold mb-6 text-gray-800">Nutrition Summary</h3>
+                        <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-6 shadow-sm">
+                            <h3 className="text-xl font-bold mb-6 text-gray-900">Nutrition Summary</h3>
 
                             {/* Circular Progress */}
                             <div className="relative w-48 h-48 mx-auto mb-6">
@@ -276,8 +287,8 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
                                     />
                                 </svg>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                    <p className="text-3xl font-bold text-gray-800">{totalMacros.calories}</p>
-                                    <p className="text-gray-500">
+                                    <p className="text-3xl font-bold text-gray-900">{totalMacros.calories}</p>
+                                    <p className="text-gray-600 font-semibold">
                                         {plan.target_calories ? `of ${plan.target_calories}` : ''} kcal
                                     </p>
                                 </div>
@@ -320,9 +331,9 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
                                                 <div className={`w-8 h-8 ${macro.bg} rounded-lg flex items-center justify-center`}>
                                                     <macro.icon size={16} className={macro.color} />
                                                 </div>
-                                                <span className="font-medium text-gray-800">{macro.label}</span>
+                                                <span className="font-bold text-gray-900">{macro.label}</span>
                                             </div>
-                                            <span className="text-sm text-gray-600">
+                                            <span className="text-sm font-bold text-gray-700">
                                                 {macro.value}{macro.unit}
                                                 {macro.target ? ` / ${macro.target}${macro.unit}` : ''}
                                             </span>
@@ -345,7 +356,7 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
 
                             {/* Daily Breakdown */}
                             <div className="mt-6 pt-6 border-t border-gray-200">
-                                <h4 className="font-medium text-gray-800 mb-3">Daily Breakdown</h4>
+                                <h4 className="font-bold text-gray-900 mb-3">Daily Breakdown</h4>
                                 <div className="space-y-2 text-sm">
                                     {mealTypes.map(mealType => {
                                         const mealCalories = entries
@@ -360,8 +371,8 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
 
                                         return (
                                             <div key={mealType} className="flex justify-between items-center">
-                                                <span className="text-gray-600">{mealType}</span>
-                                                <span className="font-medium text-gray-800">
+                                                <span className="text-gray-700 font-semibold">{mealType}</span>
+                                                <span className="font-bold text-gray-900">
                                                     {mealCalories} kcal ({percentage}%)
                                                 </span>
                                             </div>
@@ -376,24 +387,52 @@ export default function PlanDetailClient({ plan, initialEntries }: PlanDetailCli
                 {/* Delete Confirmation Modal */}
                 {showDeleteConfirm && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-xl p-6 max-w-sm w-full">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-2">Delete Plan?</h3>
-                            <p className="text-gray-600 mb-6">
-                                This action cannot be undone. The plan will be permanently deleted.
+                        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
+                                    <AlertTriangle size={24} className="text-red-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900">Delete Plan?</h3>
+                                    <p className="text-gray-600 text-sm">This action cannot be undone</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    className="ml-auto p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <p className="text-gray-700 mb-8 leading-relaxed">
+                                Are you sure you want to delete <strong>&quot;{plan.title}&quot;</strong>?
+                                This will permanently remove the plan and all its meal entries from your account.
                             </p>
+
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setShowDeleteConfirm(false)}
-                                    className="flex-1 py-2 px-4 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                                    disabled={isDeleting}
+                                    className="flex-1 py-3 px-6 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleDelete}
                                     disabled={isDeleting}
-                                    className="flex-1 py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed"
+                                    className="flex-1 py-3 px-6 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
-                                    {isDeleting ? 'Deleting...' : 'Delete'}
+                                    {isDeleting ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Trash2 size={16} />
+                                            Delete Plan
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
