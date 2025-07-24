@@ -209,7 +209,7 @@ const BookingModal: FC<{
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
     const [isBooking, setIsBooking] = useState(false);
-    const [bookingSuccessData, setBookingSuccessData] = useState<{ time: Date; isFirstConsult: boolean } | null>(null);
+    const [bookingSuccessData, setBookingSuccessData] = useState<{ time: Date; isFirstConsult: boolean; appointment: Appointment } | null>(null);
     const [error, setError] = useState<{ title: string; message: string } | null>(null);
     const [isLoadingSlots, setIsLoadingSlots] = useState(false);
     const [freshAppointments, setFreshAppointments] = useState<Appointment[]>(existingAppointments);
@@ -343,7 +343,7 @@ const BookingModal: FC<{
         await refreshAppointments(date);
     };
 
-    // FIXED: Enhanced booking logic with proper success handling
+    // FIXED: Enhanced booking logic with immediate state update
     const handleConfirmBooking = async () => {
         if (!selectedSlot || !selectedDate || !professional) return;
 
@@ -395,17 +395,24 @@ const BookingModal: FC<{
                 // Continue with booking success even if meeting creation fails
             }
 
-            // FIXED: Just set success data - don't call onBookingSuccess yet
-            setBookingSuccessData({
-                time: parseISO(appointment.start_time),
-                isFirstConsult
-            });
-
-            // Add the new appointment to the fresh appointments for UI updates
-            setFreshAppointments([...freshAppointments, {
+            // IMPORTANT FIX: Immediately update the fresh appointments to hide the booked slot
+            const newAppointment = {
                 start_time: appointment.start_time,
                 end_time: appointment.end_time
-            }]);
+            };
+
+            // Update local state immediately
+            setFreshAppointments(prev => [...prev, newAppointment]);
+
+            // Clear selected slot to prevent rebooking
+            setSelectedSlot(null);
+
+            // Set success data with the appointment
+            setBookingSuccessData({
+                time: parseISO(appointment.start_time),
+                isFirstConsult,
+                appointment: newAppointment
+            });
 
         } catch (error) {
             console.error('Booking error:', error);
@@ -422,20 +429,22 @@ const BookingModal: FC<{
     // FIXED: Show success modal with proper close handling
     if (bookingSuccessData) {
         return <SuccessModal
-            onClose={() => setBookingSuccessData(null)}
+            onClose={() => {
+                // When closing success modal, stay in booking modal with updated slots
+                setBookingSuccessData(null);
+                // Refresh appointments for the selected date to ensure UI is up to date
+                if (selectedDate) {
+                    refreshAppointments(selectedDate);
+                }
+            }}
             professionalName={professional.full_name}
             appointmentTime={bookingSuccessData.time}
             isFirstConsult={bookingSuccessData.isFirstConsult}
             hourlyRate={professional.hourly_rate}
             onFinalClose={() => {
-                // Now properly close everything and update parent
-                const newAppointment = {
-                    start_time: bookingSuccessData.time.toISOString(),
-                    end_time: new Date(bookingSuccessData.time.getTime() + 60 * 60 * 1000).toISOString()
-                };
-                setBookingSuccessData(null);
-                onBookingSuccess(newAppointment);
-                onClose(); // Close the booking modal
+                // Close everything and update parent
+                onBookingSuccess(bookingSuccessData.appointment);
+                onClose();
             }}
         />;
     }
