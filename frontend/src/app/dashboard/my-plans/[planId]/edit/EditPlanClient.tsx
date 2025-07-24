@@ -55,7 +55,10 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
     const router = useRouter();
     const [planTitle, setPlanTitle] = useState(plan.title);
     const [foodEntries, setFoodEntries] = useState<FoodEntry[]>(
-        initialEntries.map(entry => ({ ...entry, temp_id: entry.id }))
+        initialEntries.map(entry => ({
+            ...entry,
+            temp_id: entry.id || Date.now() + Math.random()
+        }))
     );
     const [targetMacros, setTargetMacros] = useState<Macros>({
         calories: plan.target_calories || 2000,
@@ -73,36 +76,42 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
     useEffect(() => {
         const checkPermission = async () => {
             setIsLoading(true);
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                router.push('/login');
-                return;
-            }
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) {
+                    router.push('/login');
+                    return;
+                }
 
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('id, role')
-                .eq('user_id', user.id)
-                .single();
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('id, role')
+                    .eq('user_id', user.id)
+                    .single();
 
-            if (!profile) {
+                if (!profile) {
+                    router.push('/dashboard');
+                    return;
+                }
+
+                // Check if user is the creator or a coach for this client
+                const { data: planData } = await supabase
+                    .from('nutrition_plans')
+                    .select('created_by_id')
+                    .eq('id', plan.id)
+                    .single();
+
+                if (planData?.created_by_id !== profile.id && profile.role === 'client') {
+                    // Clients can only edit their own plans
+                    router.push(`/dashboard/my-plans/${plan.id}`);
+                    return;
+                }
+            } catch (error) {
+                console.error('Permission check error:', error);
                 router.push('/dashboard');
-                return;
+            } finally {
+                setIsLoading(false);
             }
-
-            // Check if user is the creator or a coach for this client
-            const { data: planData } = await supabase
-                .from('nutrition_plans')
-                .select('created_by_id')
-                .eq('id', plan.id)
-                .single();
-
-            if (planData?.created_by_id !== profile.id && profile.role === 'client') {
-                // Clients can only edit their own plans
-                router.push(`/dashboard/my-plans/${plan.id}`);
-                return;
-            }
-            setIsLoading(false);
         };
         checkPermission();
     }, [supabase, router, plan.id]);
@@ -110,7 +119,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
     // --- CRUD for Food Entries ---
     const addFoodEntry = (meal_type: FoodEntry['meal_type']) => {
         const newEntry: FoodEntry = {
-            temp_id: Date.now(),
+            temp_id: Date.now() + Math.random(),
             meal_type,
             food_name: '',
             quantity_grams: 100,
@@ -122,17 +131,30 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
         setFoodEntries([...foodEntries, newEntry]);
     };
 
-    const updateFoodEntry = (id: number | undefined, temp_id: number | undefined, field: keyof FoodEntry, value: string | number) => {
-        setFoodEntries(foodEntries.map(entry =>
-            (entry.id === id || entry.temp_id === temp_id) ? { ...entry, [field]: value } : entry
-        ));
+    const updateFoodEntry = (identifier: number | undefined, field: keyof FoodEntry, value: string | number) => {
+        setFoodEntries(foodEntries.map(entry => {
+            const matchesId = entry.id === identifier;
+            const matchesTempId = entry.temp_id === identifier;
+
+            if (matchesId || matchesTempId) {
+                return { ...entry, [field]: value };
+            }
+            return entry;
+        }));
     };
 
-    const removeFoodEntry = (id: number | undefined, temp_id: number | undefined) => {
-        if (id) {
-            setDeletedEntryIds([...deletedEntryIds, id]);
+    const removeFoodEntry = (identifier: number | undefined) => {
+        const entryToRemove = foodEntries.find(entry =>
+            entry.id === identifier || entry.temp_id === identifier
+        );
+
+        if (entryToRemove?.id) {
+            setDeletedEntryIds([...deletedEntryIds, entryToRemove.id]);
         }
-        setFoodEntries(foodEntries.filter(entry => entry.id !== id && entry.temp_id !== temp_id));
+
+        setFoodEntries(foodEntries.filter(entry =>
+            entry.id !== identifier && entry.temp_id !== identifier
+        ));
     };
 
     // --- Macro Calculation ---
@@ -190,8 +212,8 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                 if (deleteError) throw deleteError;
             }
 
-            // Update existing entries and add new ones
-            const entriesToUpdate = foodEntries.filter(e => e.id);
+            // Separate existing entries from new ones
+            const entriesToUpdate = foodEntries.filter(e => e.id && !deletedEntryIds.includes(e.id));
             const entriesToInsert = foodEntries.filter(e => !e.id);
 
             // Update existing entries
@@ -201,11 +223,11 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                     .update({
                         meal_type: entry.meal_type,
                         food_name: entry.food_name,
-                        quantity_grams: entry.quantity_grams,
-                        calories: entry.calories,
-                        protein: entry.protein,
-                        carbs: entry.carbs,
-                        fats: entry.fats,
+                        quantity_grams: Number(entry.quantity_grams),
+                        calories: Number(entry.calories),
+                        protein: Number(entry.protein),
+                        carbs: Number(entry.carbs),
+                        fats: Number(entry.fats),
                     })
                     .eq('id', entry.id!);
 
@@ -215,10 +237,15 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
             // Insert new entries
             if (entriesToInsert.length > 0) {
                 const newEntries = entriesToInsert.map(entry => {
-                    const { temp_id: _, id: __, ...entryData } = entry;
+                    const { temp_id, id, ...entryData } = entry;
                     return {
                         ...entryData,
-                        plan_id: plan.id
+                        plan_id: plan.id,
+                        quantity_grams: Number(entryData.quantity_grams),
+                        calories: Number(entryData.calories),
+                        protein: Number(entryData.protein),
+                        carbs: Number(entryData.carbs),
+                        fats: Number(entryData.fats),
                     };
                 });
 
@@ -235,6 +262,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
             }, 1500);
 
         } catch (error) {
+            console.error('Save error:', error);
             const errorMessage = error instanceof Error ? error.message : 'Failed to update plan';
             setErrors([errorMessage]);
         } finally {
@@ -266,8 +294,8 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                         <span className="font-medium">Cancel Edit</span>
                     </button>
 
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8">
-                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4">
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8 shadow-sm">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-6">
                             Edit Nutrition Plan
                         </h1>
 
@@ -280,14 +308,14 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                 type="text"
                                 value={planTitle}
                                 onChange={(e) => setPlanTitle(e.target.value)}
-                                className="w-full text-lg font-medium bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent"
+                                className="w-full text-lg font-medium bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                 placeholder="Enter plan name..."
                             />
                         </div>
 
                         {/* Target Macros */}
                         <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
-                            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-blue-800">
                                 <AlertCircle size={20} className="text-blue-600" />
                                 Daily Targets
                             </h3>
@@ -298,7 +326,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.calories}
                                         onChange={(e) => setTargetMacros({...targetMacros, calories: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2"
+                                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     />
                                 </div>
                                 <div>
@@ -307,7 +335,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.protein}
                                         onChange={(e) => setTargetMacros({...targetMacros, protein: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2"
+                                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     />
                                 </div>
                                 <div>
@@ -316,7 +344,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.carbs}
                                         onChange={(e) => setTargetMacros({...targetMacros, carbs: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2"
+                                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     />
                                 </div>
                                 <div>
@@ -325,7 +353,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                         type="number"
                                         value={targetMacros.fats}
                                         onChange={(e) => setTargetMacros({...targetMacros, fats: parseInt(e.target.value) || 0})}
-                                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2"
+                                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     />
                                 </div>
                             </div>
@@ -335,7 +363,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
 
                 {/* Success Message */}
                 {showSuccess && (
-                    <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3 animate-slideDown">
+                    <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3 animate-fadeIn">
                         <Check className="text-green-600" size={20} />
                         <span className="text-green-800 font-medium">Plan updated successfully! Redirecting...</span>
                     </div>
@@ -345,7 +373,10 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                 {errors.length > 0 && (
                     <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
                         {errors.map((error, index) => (
-                            <p key={index} className="text-red-800 text-sm">{error}</p>
+                            <p key={index} className="text-red-800 text-sm flex items-center gap-2">
+                                <AlertCircle size={16} />
+                                {error}
+                            </p>
                         ))}
                     </div>
                 )}
@@ -353,113 +384,116 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                 {/* Main Content Grid */}
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                     {/* Left Side: Meal Planning */}
-                    <div className="xl:col-span-2 space-y-4">
+                    <div className="xl:col-span-2 space-y-6">
                         {['Breakfast', 'Lunch', 'Snacks', 'Dinner'].map(mealType => {
                             const config = mealConfig[mealType as keyof typeof mealConfig];
                             const mealEntries = foodEntries.filter(e => e.meal_type === mealType);
-                            const mealCalories = mealEntries.reduce((sum, e) => sum + e.calories, 0);
+                            const mealCalories = mealEntries.reduce((sum, e) => sum + (Number(e.calories) || 0), 0);
 
                             return (
-                                <div key={mealType} className={`border rounded-xl p-6 ${config.color}`}>
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                                <div key={mealType} className={`border rounded-xl p-6 shadow-sm ${config.color}`}>
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h3 className="text-xl font-semibold flex items-center gap-2">
                                             <span className="text-2xl">{config.icon}</span>
                                             {mealType}
                                         </h3>
-                                        <span className="text-sm font-medium text-gray-600">
+                                        <span className="text-sm font-medium text-gray-600 bg-white px-3 py-1 rounded-full">
                                             {mealCalories} kcal
                                         </span>
                                     </div>
 
                                     {/* Food Entries */}
-                                    <div className="space-y-3">
-                                        {mealEntries.map(entry => (
-                                            <div key={entry.id || entry.temp_id} className="bg-white p-4 rounded-lg border border-gray-200">
-                                                <div className="space-y-4">
-                                                    <div className="flex items-start gap-3">
-                                                        <input
-                                                            type="text"
-                                                            value={entry.food_name}
-                                                            onChange={e => updateFoodEntry(entry.id, entry.temp_id, 'food_name', e.target.value)}
-                                                            placeholder="Enter food name..."
-                                                            className="flex-1 font-medium bg-transparent border-b border-gray-300 focus:outline-none focus:border-gray-800 py-1"
-                                                        />
-                                                        <button
-                                                            onClick={() => removeFoodEntry(entry.id, entry.temp_id)}
-                                                            className="text-gray-400 hover:text-red-500 p-1"
-                                                        >
-                                                            <Trash2 size={18}/>
-                                                        </button>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                                                        <div>
-                                                            <label className="block text-xs text-gray-500 mb-1">Quantity</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="number"
-                                                                    value={entry.quantity_grams}
-                                                                    onChange={e => updateFoodEntry(entry.id, entry.temp_id, 'quantity_grams', parseInt(e.target.value) || 0)}
-                                                                    className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 pr-8"
-                                                                />
-                                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">g</span>
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-xs text-gray-500 mb-1">Calories</label>
+                                    <div className="space-y-4">
+                                        {mealEntries.map(entry => {
+                                            const entryId = entry.id || entry.temp_id;
+                                            return (
+                                                <div key={entryId} className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                                                    <div className="space-y-4">
+                                                        <div className="flex items-start gap-3">
                                                             <input
-                                                                type="number"
-                                                                value={entry.calories}
-                                                                onChange={e => updateFoodEntry(entry.id, entry.temp_id, 'calories', parseInt(e.target.value) || 0)}
-                                                                className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2"
+                                                                type="text"
+                                                                value={entry.food_name}
+                                                                onChange={e => updateFoodEntry(entryId, 'food_name', e.target.value)}
+                                                                placeholder="Enter food name..."
+                                                                className="flex-1 font-medium bg-transparent border-b border-gray-300 focus:outline-none focus:border-blue-500 py-2 text-lg"
                                                             />
+                                                            <button
+                                                                onClick={() => removeFoodEntry(entryId)}
+                                                                className="text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                                                            >
+                                                                <Trash2 size={18}/>
+                                                            </button>
                                                         </div>
-                                                        <div>
-                                                            <label className="block text-xs text-gray-500 mb-1">Protein</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="number"
-                                                                    value={entry.protein}
-                                                                    onChange={e => updateFoodEntry(entry.id, entry.temp_id, 'protein', parseInt(e.target.value) || 0)}
-                                                                    className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 pr-8"
-                                                                />
-                                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">g</span>
+
+                                                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="number"
+                                                                        value={entry.quantity_grams}
+                                                                        onChange={e => updateFoodEntry(entryId, 'quantity_grams', parseInt(e.target.value) || 0)}
+                                                                        className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                                    />
+                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">g</span>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-xs text-gray-500 mb-1">Carbs</label>
-                                                            <div className="relative">
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Calories</label>
                                                                 <input
                                                                     type="number"
-                                                                    value={entry.carbs}
-                                                                    onChange={e => updateFoodEntry(entry.id, entry.temp_id, 'carbs', parseInt(e.target.value) || 0)}
-                                                                    className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 pr-8"
+                                                                    value={entry.calories}
+                                                                    onChange={e => updateFoodEntry(entryId, 'calories', parseInt(e.target.value) || 0)}
+                                                                    className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                                 />
-                                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">g</span>
                                                             </div>
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-xs text-gray-500 mb-1">Fats</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="number"
-                                                                    value={entry.fats}
-                                                                    onChange={e => updateFoodEntry(entry.id, entry.temp_id, 'fats', parseInt(e.target.value) || 0)}
-                                                                    className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 pr-8"
-                                                                />
-                                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">g</span>
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Protein</label>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="number"
+                                                                        value={entry.protein}
+                                                                        onChange={e => updateFoodEntry(entryId, 'protein', parseInt(e.target.value) || 0)}
+                                                                        className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                                    />
+                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">g</span>
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Carbs</label>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="number"
+                                                                        value={entry.carbs}
+                                                                        onChange={e => updateFoodEntry(entryId, 'carbs', parseInt(e.target.value) || 0)}
+                                                                        className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                                    />
+                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">g</span>
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Fats</label>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="number"
+                                                                        value={entry.fats}
+                                                                        onChange={e => updateFoodEntry(entryId, 'fats', parseInt(e.target.value) || 0)}
+                                                                        className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                                    />
+                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">g</span>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
 
                                     {/* Add Food Button */}
                                     <button
                                         onClick={() => addFoodEntry(mealType as FoodEntry['meal_type'])}
-                                        className="w-full mt-3 flex items-center justify-center gap-2 text-gray-600 hover:text-gray-800 font-medium py-2 px-4 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors"
+                                        className="w-full mt-4 flex items-center justify-center gap-2 text-gray-600 hover:text-gray-800 font-medium py-3 px-4 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 hover:bg-white/50 transition-all"
                                     >
                                         <PlusCircle size={18}/> Add Food Item
                                     </button>
@@ -470,7 +504,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
 
                     {/* Right Side: Summary */}
                     <div className="xl:col-span-1">
-                        <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-6">
+                        <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-6 shadow-sm">
                             <h3 className="text-lg font-semibold mb-6">Plan Summary</h3>
 
                             {/* Circular Progress */}
@@ -532,10 +566,19 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                             <button
                                 onClick={handleSavePlan}
                                 disabled={isSaving || foodEntries.length === 0}
-                                className="w-full mt-6 bg-gray-800 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                                className="w-full mt-6 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                             >
-                                <Save size={20} />
-                                {isSaving ? 'Saving Changes...' : 'Save Changes'}
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 size={20} className="animate-spin" />
+                                        Saving Changes...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save size={20} />
+                                        Save Changes
+                                    </>
+                                )}
                             </button>
 
                             {foodEntries.length === 0 && (
