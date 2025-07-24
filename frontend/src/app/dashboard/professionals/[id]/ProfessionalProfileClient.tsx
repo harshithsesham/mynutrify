@@ -295,9 +295,16 @@ const BookingModal: FC<{
             .map(apt => {
                 const startTime = parseISO(apt.start_time);
                 const endTime = parseISO(apt.end_time);
+
+                // Use getHours() instead of format() to get the local hour
+                const startHour = startTime.getHours();
+                const endHour = endTime.getHours();
+
+                console.log(`Appointment from ${apt.start_time} maps to hours ${startHour}-${endHour}`);
+
                 return {
-                    start: parseInt(format(startTime, 'H')), // Get hour as number
-                    end: parseInt(format(endTime, 'H'))      // Get hour as number
+                    start: startHour,
+                    end: endHour
                 };
             });
 
@@ -319,6 +326,7 @@ const BookingModal: FC<{
 
             // Check if slot is after minimum bookable time
             if (!isAfter(slotDateTime, calendarData.minBookableTime)) {
+                console.log(`Slot ${hour}:00 is before min bookable time, skipping`);
                 continue;
             }
 
