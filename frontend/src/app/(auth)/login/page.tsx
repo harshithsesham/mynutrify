@@ -62,7 +62,7 @@ function LoginForm() {
                 password,
                 options: {
                     data: { full_name: fullName },
-                    emailRedirectTo: `${window.location.origin}/auth/callback?next=/role-selection`,
+                    emailRedirectTo: `${window.location.origin}/callback?next=/role-selection`,
                 },
             });
 
