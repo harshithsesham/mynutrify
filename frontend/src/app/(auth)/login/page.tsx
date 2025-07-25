@@ -115,7 +115,7 @@ function LoginForm() {
         <div className="bg-gray-50 text-gray-800 min-h-screen flex flex-col items-center justify-center font-sans p-4">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
-                    <Link href="/" className="text-3xl font-bold text-gray-800">Nutrify</Link>
+                    <Link href="/" className="text-3xl font-bold text-gray-800">Nutrishiksha</Link>
                     <p className="text-gray-600 mt-2">
                         {isLoginView ? 'Welcome back! Sign in to continue.' : 'Create an account to get started.'}
                     </p>
@@ -225,7 +225,7 @@ function LoginPageSkeleton() {
         <div className="bg-gray-50 text-gray-800 min-h-screen flex flex-col items-center justify-center font-sans p-4">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
-                    <div className="text-3xl font-bold text-gray-800">Nutrify</div>
+                    <div className="text-3xl font-bold text-gray-800">Nutrishiksha</div>
                     <div className="h-4 bg-gray-200 rounded mt-2 animate-pulse"></div>
                 </div>
                 <div className="bg-white p-8 rounded-2xl shadow-md">

@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         oauth2Client.setCredentials({ refresh_token: professionalProfile.google_refresh_token });
 
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-        const requestId = `nutrify-${appointmentId}-${Date.now()}`;
+        const requestId = `Nutrishiksha-${appointmentId}-${Date.now()}`;
 
         // 4. Format professional role
         const roleTitle = professionalProfile.role === 'nutritionist' ? 'Nutritionist' : 'Trainer';
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
             conferenceDataVersion: 1,
             requestBody: {
                 summary: `Consultation: ${roleTitle} ${professionalProfile.full_name} & Client ${clientName}`,
-                description: `${roleTitle === 'Nutritionist' ? 'Nutrition' : 'Training'} consultation session.\n\nProfessional: ${professionalProfile.full_name} (${roleTitle})\nClient: ${clientName}\n\nBooked via Nutrify platform.`,
+                description: `${roleTitle === 'Nutritionist' ? 'Nutrition' : 'Training'} consultation session.\n\nProfessional: ${professionalProfile.full_name} (${roleTitle})\nClient: ${clientName}\n\nBooked via Nutrishiksha platform.`,
                 start: {
                     dateTime: startTime,
                 },

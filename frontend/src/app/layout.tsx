@@ -5,7 +5,7 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
-    title: "Nutrify",
+    title: "Nutrishiksha",
     description: "Your personal nutrition and fitness tracker",
 };
 

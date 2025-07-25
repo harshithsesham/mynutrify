@@ -54,7 +54,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
     const SidebarContent = () => (
         <>
             <div className="flex justify-between items-center mb-12">
-                <h1 className="text-3xl font-bold text-gray-800">Nutrify</h1>
+                <h1 className="text-3xl font-bold text-gray-800">Nutrishiksha</h1>
                 {/* Close button for mobile */}
                 <button onClick={() => setIsOpen(false)} className="md:hidden text-gray-500 hover:text-gray-800">
                     <X size={28} />

@@ -151,7 +151,7 @@ export default function RoleSelectionPage() {
         <div className="bg-gray-50 text-gray-800 min-h-screen flex items-center justify-center font-sans p-4">
             <div className="text-center max-w-4xl w-full">
                 <h1 className="text-5xl font-bold mb-4">One Last Step!</h1>
-                <p className="text-xl text-gray-600 mb-12">How will you be using Nutrify?</p>
+                <p className="text-xl text-gray-600 mb-12">How will you be using Nutrishiksha?</p>
 
                 {error && (
                     <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 max-w-md mx-auto">

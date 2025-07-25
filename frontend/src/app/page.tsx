@@ -6,7 +6,7 @@ import { Zap, Heart, Shield } from 'lucide-react';
 const Header = () => (
     <header className="bg-white shadow-sm">
       <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
-        <div className="text-2xl font-bold text-gray-800">Nutrify</div>
+        <div className="text-2xl font-bold text-gray-800">Nutrishiksha</div>
         <div>
           <Link href="/login" className="text-gray-600 hover:text-gray-800 mr-4">Login</Link>
           <Link href="/login" className="bg-gray-800 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-700">
