@@ -1,7 +1,4 @@
-// =============================================================================
 // app/(auth)/callback/route.ts
-// =============================================================================
-
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
@@ -20,7 +17,7 @@ export async function GET(request: NextRequest) {
     if (error) {
         console.error('Auth callback error:', error, error_description);
         return NextResponse.redirect(
-            new URL(`/auth/login?error=${encodeURIComponent(error_description || error)}`, requestUrl.origin)
+            new URL(`/login?error=${encodeURIComponent(error_description || error)}`, requestUrl.origin)
         );
     }
 
@@ -34,7 +31,7 @@ export async function GET(request: NextRequest) {
             if (exchangeError) {
                 console.error('Session exchange error:', exchangeError);
                 return NextResponse.redirect(
-                    new URL(`/auth/login?error=${encodeURIComponent(exchangeError.message)}`, requestUrl.origin)
+                    new URL(`/login?error=${encodeURIComponent(exchangeError.message)}`, requestUrl.origin)
                 );
             }
 
@@ -55,7 +52,7 @@ export async function GET(request: NextRequest) {
                 // If no profile or no role, send to role selection
                 if (!profile || !profile.role) {
                     console.log('Redirecting to role selection');
-                    return NextResponse.redirect(new URL('/auth/role-selection', requestUrl.origin));
+                    return NextResponse.redirect(new URL('/role-selection', requestUrl.origin));
                 }
 
                 console.log('User has role:', profile.role, 'redirecting to dashboard');
@@ -63,7 +60,7 @@ export async function GET(request: NextRequest) {
         } catch (error) {
             console.error('Callback processing error:', error);
             return NextResponse.redirect(
-                new URL('/auth/login?error=Authentication failed', requestUrl.origin)
+                new URL('/login?error=Authentication failed', requestUrl.origin)
             );
         }
     }

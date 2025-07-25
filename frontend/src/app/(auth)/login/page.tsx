@@ -48,7 +48,7 @@ function LoginForm() {
                         .single();
 
                     if (!profile?.role) {
-                        router.push('/auth/role-selection');
+                        router.push('/role-selection');
                     } else {
                         router.push('/dashboard');
                     }
@@ -62,7 +62,7 @@ function LoginForm() {
                 password,
                 options: {
                     data: { full_name: fullName },
-                    emailRedirectTo: `${window.location.origin}/auth/callback?next=/auth/role-selection`,
+                    emailRedirectTo: `${window.location.origin}/auth/callback?next=/role-selection`,
                 },
             });
 
@@ -132,7 +132,7 @@ function LoginForm() {
                                     id="fullName"
                                     value={fullName}
                                     onChange={(e) => setFullName(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent"
                                     required
                                 />
                             </div>
@@ -146,7 +146,7 @@ function LoginForm() {
                                 id="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent"
                                 required
                             />
                         </div>
@@ -159,7 +159,7 @@ function LoginForm() {
                                 id="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent"
                                 required
                                 minLength={6}
                             />
@@ -176,7 +176,7 @@ function LoginForm() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+                            className="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:bg-gray-500 flex items-center justify-center"
                         >
                             {loading ? (
                                 <div className="flex items-center">
@@ -208,7 +208,7 @@ function LoginForm() {
                                 setPassword('');
                                 setFullName('');
                             }}
-                            className="text-blue-600 hover:text-blue-700 hover:underline font-semibold ml-2 focus:outline-none"
+                            className="text-gray-800 hover:underline font-semibold ml-2 focus:outline-none"
                         >
                             {isLoginView ? 'Sign Up' : 'Sign In'}
                         </button>
@@ -237,7 +237,7 @@ function LoginPageSkeleton() {
                         <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
                     </div>
                     <div className="flex items-center justify-center mt-6">
-                        <Loader2 className="animate-spin h-6 w-6 text-blue-600" />
+                        <Loader2 className="animate-spin h-6 w-6 text-gray-600" />
                         <span className="ml-2 text-gray-600">Loading...</span>
                     </div>
                 </div>
