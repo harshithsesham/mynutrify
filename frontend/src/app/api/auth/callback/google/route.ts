@@ -1,19 +1,10 @@
-// 1. Fix CORS in your API route
-// app/api/auth/callback/google/route.ts - Add CORS headers
-
+// app/api/auth/callback/google/route.ts
 import { google } from 'googleapis';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(req: NextRequest) {
-    // Add CORS headers
-    const corsHeaders = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    };
-
     const supabase = createRouteHandlerClient({ cookies });
     const url = new URL(req.url);
     const code = url.searchParams.get('code');
@@ -24,21 +15,12 @@ export async function GET(req: NextRequest) {
     // Handle user denial
     if (error) {
         console.log('User denied access:', error);
-        const redirectResponse = NextResponse.redirect(new URL('/dashboard/settings/profile?error=access_denied', req.url));
-        // Add CORS headers to redirect
-        Object.entries(corsHeaders).forEach(([key, value]) => {
-            redirectResponse.headers.set(key, value);
-        });
-        return redirectResponse;
+        return NextResponse.redirect(new URL('/dashboard/settings/profile?error=access_denied', req.url));
     }
 
     if (!code) {
         console.log('No authorization code received');
-        const redirectResponse = NextResponse.redirect(new URL('/dashboard/settings/profile?error=no_code', req.url));
-        Object.entries(corsHeaders).forEach(([key, value]) => {
-            redirectResponse.headers.set(key, value);
-        });
-        return redirectResponse;
+        return NextResponse.redirect(new URL('/dashboard/settings/profile?error=no_code', req.url));
     }
 
     try {
@@ -47,11 +29,8 @@ export async function GET(req: NextRequest) {
 
         if (authError || !user) {
             console.log('User not authenticated:', authError);
-            const redirectResponse = NextResponse.redirect(new URL('/login?error=not_authenticated&message=Please log in first', req.url));
-            Object.entries(corsHeaders).forEach(([key, value]) => {
-                redirectResponse.headers.set(key, value);
-            });
-            return redirectResponse;
+            // Redirect to login instead of throwing error
+            return NextResponse.redirect(new URL('/login?error=not_authenticated&message=Please log in first', req.url));
         }
 
         console.log('User authenticated:', user.id);
@@ -76,10 +55,14 @@ export async function GET(req: NextRequest) {
             expiry_date: tokens.expiry_date
         });
 
+        // Log raw tokens for debugging (remove in production)
+        console.log('Raw tokens:', JSON.stringify(tokens, null, 2));
+
         const { refresh_token, access_token } = tokens;
 
         if (!refresh_token) {
             console.log('No refresh token received - user may not have granted offline access');
+            // Still save access token if available
             if (!access_token) {
                 throw new Error('No tokens received from Google');
             }
@@ -112,37 +95,18 @@ export async function GET(req: NextRequest) {
 
         console.log('Google Calendar connected successfully');
 
-        // Redirect with success message and CORS headers
-        const redirectResponse = NextResponse.redirect(new URL('/dashboard/settings/profile?success=calendar_connected&refresh=true', req.url));
-        Object.entries(corsHeaders).forEach(([key, value]) => {
-            redirectResponse.headers.set(key, value);
-        });
-        return redirectResponse;
+        // Redirect with success message
+        return NextResponse.redirect(new URL('/dashboard/settings/profile?success=calendar_connected', req.url));
 
     } catch (error) {
         console.error('Error during Google OAuth callback:', error);
 
+        // Provide more specific error handling
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         const encodedError = encodeURIComponent(errorMessage);
 
-        const redirectResponse = NextResponse.redirect(
+        return NextResponse.redirect(
             new URL(`/dashboard/settings/profile?error=calendar_failed&message=${encodedError}`, req.url)
         );
-        Object.entries(corsHeaders).forEach(([key, value]) => {
-            redirectResponse.headers.set(key, value);
-        });
-        return redirectResponse;
     }
-}
-
-// Handle OPTIONS request for CORS
-export async function OPTIONS() {
-    return new NextResponse(null, {
-        status: 200,
-        headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        },
-    });
 }

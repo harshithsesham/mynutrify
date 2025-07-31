@@ -152,9 +152,12 @@ function ProfileSettingsContent() {
             setTimeout(() => setShowSuccess(false), 5000);
             // Clean up URL parameters
             router.replace('/dashboard/settings/profile', { scroll: false });
-        } else if (error) {
-            const message = searchParams.get('message') || 'Connection failed';
-            alert(`Error: ${decodeURIComponent(message)}`);
+        } else if (error && error !== 'calendar_failed') {
+            // Only show alert for non-calendar errors, and avoid "Unknown error"
+            const message = searchParams.get('message');
+            if (message && message !== 'Unknown error') {
+                alert(`Error: ${decodeURIComponent(message)}`);
+            }
             // Clean up URL parameters
             router.replace('/dashboard/settings/profile', { scroll: false });
         }
