@@ -19,8 +19,10 @@ export async function GET() {
         access_type: 'offline', // This is crucial for refresh token
         scope: scopes,
         include_granted_scopes: true,
-        prompt: 'consent' // Forces consent screen every time - ensures refresh token
-        // Removed approval_prompt as it conflicts with prompt parameter
+        prompt: 'consent', // Forces consent screen every time - ensures refresh token
+        // Add these parameters to force refresh token
+        response_type: 'code',
+        approval_prompt: 'force' // For older Google OAuth versions
     });
 
     console.log('Generated auth URL:', authorizationUrl);

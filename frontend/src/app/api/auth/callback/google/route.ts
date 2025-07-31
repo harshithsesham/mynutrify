@@ -68,17 +68,20 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        // Save tokens to user's profile
+        // Save tokens to user's profile (only save refresh token since access token column doesn't exist)
         const updateData: {
             google_refresh_token?: string;
-            google_access_token?: string;
         } = {};
 
         if (refresh_token) {
             updateData.google_refresh_token = refresh_token;
+            console.log('Saving refresh token to database');
+        } else {
+            console.log('No refresh token to save - this may cause issues with calendar integration');
         }
-        if (access_token) {
-            updateData.google_access_token = access_token;
+
+        if (Object.keys(updateData).length === 0) {
+            throw new Error('GOOGLE_NO_TOKENS: No tokens available to save');
         }
 
         console.log('Updating user profile with tokens');

@@ -14,7 +14,6 @@ type Profile = {
     interests: string[] | null;
     hourly_rate: number | null;
     google_refresh_token: string | null;
-    google_access_token: string | null;
     timezone: string;
 };
 
@@ -83,7 +82,7 @@ function ProfileSettingsContent() {
     // Check calendar connection status
     const checkCalendarConnection = useCallback(async () => {
         if (profile) {
-            const hasToken = !!(profile.google_refresh_token || profile.google_access_token);
+            const hasToken = !!profile.google_refresh_token;
             setIsCalendarConnected(hasToken);
             console.log('Calendar connected status:', hasToken);
         }
@@ -94,7 +93,7 @@ function ProfileSettingsContent() {
         setLoading(true);
         const { data: profileData, error: profileError } = await supabase
             .from('profiles')
-            .select('id, full_name, bio, specialties, interests, hourly_rate, google_refresh_token, google_access_token, timezone')
+            .select('id, full_name, bio, specialties, interests, hourly_rate, google_refresh_token, timezone')
             .eq('user_id', userId)
             .single();
 
@@ -109,9 +108,10 @@ function ProfileSettingsContent() {
             });
             setProfileId(profileData.id);
 
-            // Check calendar connection status
-            const hasToken = !!(profileData.google_refresh_token || profileData.google_access_token);
+            // Check calendar connection status (only check refresh token)
+            const hasToken = !!profileData.google_refresh_token;
             setIsCalendarConnected(hasToken);
+            console.log('Calendar connected status:', hasToken, 'Refresh token present:', !!profileData.google_refresh_token);
 
             // Get availability data
             const { data: availabilityData } = await supabase
@@ -152,12 +152,23 @@ function ProfileSettingsContent() {
             setTimeout(() => setShowSuccess(false), 5000);
             // Clean up URL parameters
             router.replace('/dashboard/settings/profile', { scroll: false });
-        } else if (error && error !== 'calendar_failed') {
-            // Only show alert for non-calendar errors, and avoid "Unknown error"
-            const message = searchParams.get('message');
-            if (message && message !== 'Unknown error') {
-                alert(`Error: ${decodeURIComponent(message)}`);
+        } else if (error) {
+            // Handle different error types
+            const message = searchParams.get('message') || '';
+            const decodedMessage = decodeURIComponent(message);
+
+            // Skip showing alerts for certain error types
+            if (error === 'NO_REFRESH_TOKEN') {
+                // Don't show error for partial success
+                console.log('Calendar connected but no refresh token');
+            } else if (error === 'NOT_AUTHENTICATED') {
+                alert('Please log in first before connecting Google Calendar');
+            } else if (error === 'NO_TOKENS') {
+                alert('Google authorization failed. Please try again.');
+            } else if (decodedMessage && decodedMessage !== 'Unknown error') {
+                alert(`Error: ${decodedMessage}`);
             }
+
             // Clean up URL parameters
             router.replace('/dashboard/settings/profile', { scroll: false });
         }
@@ -199,8 +210,7 @@ function ProfileSettingsContent() {
                 const { error } = await supabase
                     .from('profiles')
                     .update({
-                        google_refresh_token: null,
-                        google_access_token: null
+                        google_refresh_token: null
                     })
                     .eq('user_id', user.id);
 
@@ -212,8 +222,7 @@ function ProfileSettingsContent() {
                     if (profile) {
                         setProfile({
                             ...profile,
-                            google_refresh_token: null,
-                            google_access_token: null
+                            google_refresh_token: null
                         });
                     }
                     alert('Google Calendar disconnected successfully');
