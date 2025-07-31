@@ -45,10 +45,18 @@ export async function GET(req: NextRequest) {
 
         // Exchange the authorization code for tokens
         const { tokens } = await oauth2Client.getToken(code);
-        console.log('Tokens received:', {
-            access_token: !!tokens.access_token,
-            refresh_token: !!tokens.refresh_token
+
+        // Debug token response
+        console.log('Full token response:', {
+            access_token: tokens.access_token ? 'PRESENT' : 'MISSING',
+            refresh_token: tokens.refresh_token ? 'PRESENT' : 'MISSING',
+            scope: tokens.scope,
+            token_type: tokens.token_type,
+            expiry_date: tokens.expiry_date
         });
+
+        // Log raw tokens for debugging (remove in production)
+        console.log('Raw tokens:', JSON.stringify(tokens, null, 2));
 
         const { refresh_token, access_token } = tokens;
 
