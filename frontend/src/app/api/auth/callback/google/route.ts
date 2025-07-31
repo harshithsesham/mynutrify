@@ -61,7 +61,11 @@ export async function GET(req: NextRequest) {
         }
 
         // Save tokens to user's profile
-        const updateData: any = {};
+        const updateData: {
+            google_refresh_token?: string;
+            google_access_token?: string;
+        } = {};
+
         if (refresh_token) {
             updateData.google_refresh_token = refresh_token;
         }
