@@ -2,9 +2,9 @@
 'use client';
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, Suspense } from 'react';
 import { CheckCircle, Globe, User, Calendar, DollarSign, Sparkles, Clock, Save, AlertCircle, Check } from 'lucide-react';
-import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 // Type definitions
 type Profile = {
@@ -14,6 +14,7 @@ type Profile = {
     interests: string[] | null;
     hourly_rate: number | null;
     google_refresh_token: string | null;
+    google_access_token: string | null;
     timezone: string;
 };
 
@@ -58,8 +59,12 @@ const timezoneGroups = {
     ],
 };
 
-export default function ProfileSettingsPage() {
+// Component that uses useSearchParams (needs to be wrapped in Suspense)
+function ProfileSettingsContent() {
     const supabase = createClientComponentClient();
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [profile, setProfile] = useState<Profile | null>(null);
@@ -68,13 +73,28 @@ export default function ProfileSettingsPage() {
     const [detectedTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
     const [showSuccess, setShowSuccess] = useState(false);
     const [activeSection, setActiveSection] = useState<'profile' | 'availability' | 'integrations'>('profile');
+    const [isCalendarConnected, setIsCalendarConnected] = useState(false);
+
+    // Check for URL parameters from OAuth callback
+    const success = searchParams.get('success');
+    const error = searchParams.get('error');
+    const shouldRefresh = searchParams.get('refresh');
+
+    // Check calendar connection status
+    const checkCalendarConnection = useCallback(async () => {
+        if (profile) {
+            const hasToken = !!(profile.google_refresh_token || profile.google_access_token);
+            setIsCalendarConnected(hasToken);
+            console.log('Calendar connected status:', hasToken);
+        }
+    }, [profile]);
 
     // Fetches all necessary data
     const getProfileData = useCallback(async (userId: string) => {
         setLoading(true);
         const { data: profileData, error: profileError } = await supabase
             .from('profiles')
-            .select('id, full_name, bio, specialties, interests, hourly_rate, google_refresh_token, timezone')
+            .select('id, full_name, bio, specialties, interests, hourly_rate, google_refresh_token, google_access_token, timezone')
             .eq('user_id', userId)
             .single();
 
@@ -88,6 +108,12 @@ export default function ProfileSettingsPage() {
                 timezone: profileData.timezone || detectedTimezone
             });
             setProfileId(profileData.id);
+
+            // Check calendar connection status
+            const hasToken = !!(profileData.google_refresh_token || profileData.google_access_token);
+            setIsCalendarConnected(hasToken);
+
+            // Get availability data
             const { data: availabilityData } = await supabase
                 .from('availability')
                 .select('id, day_of_week, start_time, end_time')
@@ -104,6 +130,35 @@ export default function ProfileSettingsPage() {
         };
         getUserAndData();
     }, [supabase, getProfileData]);
+
+    // Re-check connection status if redirected from OAuth
+    useEffect(() => {
+        if (success === 'calendar_connected' || shouldRefresh) {
+            console.log('OAuth callback detected, refreshing connection status');
+            // Small delay to ensure database is updated
+            setTimeout(async () => {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    getProfileData(user.id);
+                }
+            }, 1000);
+        }
+    }, [success, shouldRefresh, supabase, getProfileData]);
+
+    // Show success/error messages
+    useEffect(() => {
+        if (success === 'calendar_connected') {
+            setShowSuccess(true);
+            setTimeout(() => setShowSuccess(false), 5000);
+            // Clean up URL parameters
+            router.replace('/dashboard/settings/profile', { scroll: false });
+        } else if (error) {
+            const message = searchParams.get('message') || 'Connection failed';
+            alert(`Error: ${decodeURIComponent(message)}`);
+            // Clean up URL parameters
+            router.replace('/dashboard/settings/profile', { scroll: false });
+        }
+    }, [success, error, searchParams, router]);
 
     // State change handlers
     const handleProfileChange = (field: keyof Profile, value: string | string[] | number | null) => {
@@ -126,6 +181,44 @@ export default function ProfileSettingsPage() {
             setAvailability([...availability, { day_of_week: dayIndex, start_time: '09:00', end_time: '17:00' }]);
         } else {
             setAvailability(availability.filter(slot => slot.day_of_week !== dayIndex));
+        }
+    };
+
+    // Handle Google Calendar connection
+    const handleConnectCalendar = () => {
+        window.location.href = '/api/auth/google';
+    };
+
+    const handleDisconnectCalendar = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { error } = await supabase
+                    .from('profiles')
+                    .update({
+                        google_refresh_token: null,
+                        google_access_token: null
+                    })
+                    .eq('user_id', user.id);
+
+                if (error) {
+                    console.error('Error disconnecting calendar:', error);
+                    alert('Failed to disconnect calendar');
+                } else {
+                    setIsCalendarConnected(false);
+                    if (profile) {
+                        setProfile({
+                            ...profile,
+                            google_refresh_token: null,
+                            google_access_token: null
+                        });
+                    }
+                    alert('Google Calendar disconnected successfully');
+                }
+            }
+        } catch (error) {
+            console.error('Error disconnecting calendar:', error);
+            alert('Failed to disconnect calendar');
         }
     };
 
@@ -196,6 +289,16 @@ export default function ProfileSettingsPage() {
                 <h1 className="text-3xl font-bold text-gray-800 mb-2">Settings</h1>
                 <p className="text-gray-600">Manage your profile, availability, and integrations</p>
             </div>
+
+            {/* Success Message for Calendar Connection */}
+            {success === 'calendar_connected' && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-800">
+                        <CheckCircle size={20} />
+                        <span className="font-medium">Google Calendar connected successfully!</span>
+                    </div>
+                </div>
+            )}
 
             {/* Navigation Tabs */}
             <div className="flex space-x-1 mb-8 bg-gray-100 p-1 rounded-lg">
@@ -422,21 +525,34 @@ export default function ProfileSettingsPage() {
                                         <p className="text-sm text-gray-600 mt-1">
                                             Automatically create Google Meet links for appointments
                                         </p>
+                                        {isCalendarConnected && (
+                                            <p className="text-xs text-green-600 mt-2">
+                                                ✓ Connected - Calendar integration is active
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
-                                {profile?.google_refresh_token ? (
-                                    <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
-                                        <CheckCircle size={16} />
-                                        <span className="text-sm font-medium">Connected</span>
+                                {isCalendarConnected ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
+                                            <CheckCircle size={16} />
+                                            <span className="text-sm font-medium">Connected</span>
+                                        </div>
+                                        <button
+                                            onClick={handleDisconnectCalendar}
+                                            className="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                                        >
+                                            Disconnect
+                                        </button>
                                     </div>
                                 ) : (
-                                    <Link
-                                        href="/api/auth/google"
+                                    <button
+                                        onClick={handleConnectCalendar}
                                         className="bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm"
                                     >
                                         Connect
-                                    </Link>
+                                    </button>
                                 )}
                             </div>
                         </div>
@@ -495,5 +611,26 @@ export default function ProfileSettingsPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+// Loading component for Suspense fallback
+function SettingsLoading() {
+    return (
+        <div className="flex items-center justify-center min-h-screen">
+            <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto mb-4"></div>
+                <p className="text-gray-500">Loading Settings...</p>
+            </div>
+        </div>
+    );
+}
+
+// Main component with Suspense wrapper
+export default function ProfileSettingsPage() {
+    return (
+        <Suspense fallback={<SettingsLoading />}>
+            <ProfileSettingsContent />
+        </Suspense>
     );
 }
