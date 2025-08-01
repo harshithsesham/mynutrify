@@ -85,20 +85,46 @@ export default async function DashboardPage() {
                 console.log('Consultation query error:', consultationError);
 
                 // Transform consultation requests to match appointment format
-                const consultationAppointments: AppointmentWithOtherParty[] = (consultations || []).map(consultation => {
-                    // Combine date and time for start_time
-                    const dateTime = consultation.scheduled_time
-                        ? `${consultation.scheduled_date}T${consultation.scheduled_time}:00`
-                        : `${consultation.scheduled_date}T09:00:00`;
+                const consultationAppointments: AppointmentWithOtherParty[] = (consultations || [])
+                    .filter(consultation => {
+                        // Filter out consultations with invalid dates
+                        if (!consultation.scheduled_date) return false;
+                        return true; // Trust that the date is valid if it exists
+                    })
+                    .map(consultation => {
+                        // Combine date and time for start_time
+                        let dateTime: string;
+                        try {
+                            // For date-only values (YYYY-MM-DD), we need to be careful about timezone
+                            // Parse as UTC to avoid timezone issues
+                            const datePart = consultation.scheduled_date;
+                            const timePart = consultation.scheduled_time || '09:00';
 
-                    return {
-                        id: `consultation_${consultation.id}`,
-                        start_time: dateTime,
-                        client: { full_name: consultation.full_name || consultation.email || 'Unknown Client' },
-                        meeting_link: consultation.meeting_link || undefined,
-                        session_type: 'Health Consultation'
-                    };
-                });
+                            // Create an ISO string directly without using Date constructor
+                            dateTime = `${datePart}T${timePart}:00.000Z`;
+
+                            // Validate the combined datetime
+                            const testDateTime = new Date(dateTime);
+                            if (isNaN(testDateTime.getTime())) {
+                                console.warn('Invalid combined datetime:', dateTime);
+                                // Use current date/time as fallback
+                                const now = new Date();
+                                dateTime = now.toISOString();
+                            }
+                        } catch (error) {
+                            console.error('Error creating datetime:', error);
+                            const now = new Date();
+                            dateTime = now.toISOString();
+                        }
+
+                        return {
+                            id: `consultation_${consultation.id}`,
+                            start_time: dateTime,
+                            client: { full_name: consultation.full_name || consultation.email || 'Unknown Client' },
+                            meeting_link: consultation.meeting_link || undefined,
+                            session_type: 'Health Consultation'
+                        };
+                    });
 
                 console.log('Transformed consultations:', consultationAppointments);
 

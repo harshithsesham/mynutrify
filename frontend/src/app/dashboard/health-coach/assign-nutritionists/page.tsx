@@ -114,13 +114,16 @@ export default function AssignProfessionalsPage() {
                         // Validate scheduled_date
                         if (scheduledDate) {
                             try {
-                                const date = new Date(scheduledDate);
-                                if (isNaN(date.getTime())) {
-                                    console.warn('Invalid scheduled_date:', scheduledDate);
+                                // For date-only strings (YYYY-MM-DD), parse carefully
+                                // Don't use new Date() directly as it can cause timezone issues
+                                if (scheduledDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                                    // Valid date format, keep as is
+                                } else {
+                                    console.warn('Invalid scheduled_date format:', scheduledDate);
                                     scheduledDate = undefined;
                                 }
                             } catch (e) {
-                                console.error('Error parsing scheduled_date:', e);
+                                console.error('Error validating scheduled_date:', e);
                                 scheduledDate = undefined;
                             }
                         }
@@ -502,7 +505,10 @@ export default function AssignProfessionalsPage() {
                                                     {(() => {
                                                         try {
                                                             if (request.scheduled_date) {
-                                                                return format(parseISO(request.scheduled_date), 'MMM dd');
+                                                                // Parse date carefully to avoid timezone issues
+                                                                const [year, month, day] = request.scheduled_date.split('-').map(Number);
+                                                                const date = new Date(year, month - 1, day);
+                                                                return format(date, 'MMM dd');
                                                             } else if (request.created_at) {
                                                                 return format(parseISO(request.created_at), 'MMM dd');
                                                             }
@@ -525,7 +531,10 @@ export default function AssignProfessionalsPage() {
                                                 <p className="text-sm text-blue-800">
                                                     {(() => {
                                                         try {
-                                                            const formattedDate = format(parseISO(request.scheduled_date), 'EEEE, MMMM do, yyyy');
+                                                            // Parse date carefully to avoid timezone issues
+                                                            const [year, month, day] = request.scheduled_date.split('-').map(Number);
+                                                            const date = new Date(year, month - 1, day);
+                                                            const formattedDate = format(date, 'EEEE, MMMM do, yyyy');
                                                             return `${formattedDate}${request.scheduled_time ? ` at ${request.scheduled_time}` : ''}`;
                                                         } catch (e) {
                                                             console.error('Error formatting scheduled date:', e);
@@ -625,7 +634,9 @@ export default function AssignProfessionalsPage() {
                                     {selectedClient.scheduled_date && selectedClient.status === 'scheduled' && (
                                         <p><strong>📅 Scheduled:</strong> {(() => {
                                             try {
-                                                return format(parseISO(selectedClient.scheduled_date), 'MMM dd, yyyy');
+                                                const [year, month, day] = selectedClient.scheduled_date.split('-').map(Number);
+                                                const date = new Date(year, month - 1, day);
+                                                return format(date, 'MMM dd, yyyy');
                                             } catch {
                                                 return 'Invalid date';
                                             }
