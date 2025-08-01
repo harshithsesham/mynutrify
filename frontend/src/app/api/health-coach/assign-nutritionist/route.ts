@@ -38,38 +38,82 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Not a health coach' }, { status: 403 });
         }
 
+        console.log('Assignment data:', { clientId, nutritionistId, assignmentReason, consultationId });
+
+        // FIXED: Check if client profile exists first
+        const { data: clientProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', clientId)
+            .single();
+
+        if (!clientProfile) {
+            return NextResponse.json({ error: 'Client not found' }, { status: 404 });
+        }
+
+        // FIXED: Check if nutritionist profile exists
+        const { data: nutritionistProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', nutritionistId)
+            .single();
+
+        if (!nutritionistProfile) {
+            return NextResponse.json({ error: 'Nutritionist not found' }, { status: 404 });
+        }
+
         // Create nutritionist assignment
-        const { error: assignmentError } = await supabase
+        const { data: assignment, error: assignmentError } = await supabase
             .from('nutritionist_assignments')
             .insert({
                 client_id: clientId,
                 nutritionist_id: nutritionistId,
                 assigned_by: healthCoach.id,
-                assignment_reason: assignmentReason
-            });
+                assignment_reason: assignmentReason || 'Assigned by health coach',
+                status: 'active',
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
 
-        if (assignmentError) throw assignmentError;
+        if (assignmentError) {
+            console.error('Assignment error:', assignmentError);
+            throw assignmentError;
+        }
+
+        console.log('Assignment created:', assignment);
 
         // Update consultation request
         if (consultationId) {
-            await supabase
+            const { error: consultationError } = await supabase
                 .from('consultation_requests')
                 .update({
-                    status: 'completed',
                     assigned_nutritionist_id: nutritionistId,
-                    completed_at: new Date().toISOString()
+                    updated_at: new Date().toISOString()
                 })
                 .eq('id', consultationId);
+
+            if (consultationError) {
+                console.error('Consultation update error:', consultationError);
+                // Don't fail the whole operation if this fails
+            }
         }
 
         // TODO: Send notification to nutritionist about new client
         // TODO: Send welcome email to client with nutritionist info
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({
+            success: true,
+            assignment,
+            message: 'Nutritionist assigned successfully'
+        });
     } catch (error) {
         console.error('Error assigning nutritionist:', error);
         return NextResponse.json(
-            { error: 'Failed to assign nutritionist' },
+            {
+                error: 'Failed to assign nutritionist',
+                details: error instanceof Error ? error.message : 'Unknown error'
+            },
             { status: 500 }
         );
     }

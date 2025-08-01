@@ -60,6 +60,7 @@ export default function AssignNutritionistsPage() {
 
     const fetchData = useCallback(async () => {
         try {
+            setLoading(true);
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
@@ -72,13 +73,13 @@ export default function AssignNutritionistsPage() {
             if (!profile) return;
 
             // Get consultation requests that are completed but don't have assigned nutritionists
-            const { data: requests } = await supabase
+            const { data: requests, error: requestsError } = await supabase
                 .from('consultation_requests')
                 .select(`
                     id,
                     client_id,
-                    client_name,
-                    client_email,
+                    full_name,
+                    email,
                     health_goals,
                     current_challenges,
                     status,
@@ -90,62 +91,82 @@ export default function AssignNutritionistsPage() {
                 .is('assigned_nutritionist_id', null)
                 .order('completed_at', { ascending: false });
 
-            if (requests) {
-                setConsultationRequests(requests);
+            if (requestsError) {
+                console.error('Error fetching consultation requests:', requestsError);
             }
 
-            // Get all available nutritionists with their stats
-            const { data: nutritionistProfiles } = await supabase
-                .from('nutritionists')
+            if (requests) {
+                // Transform the data to match our ConsultationRequest type
+                const transformedRequests = requests.map(request => ({
+                    ...request,
+                    client_name: request.full_name,
+                    client_email: request.email
+                }));
+                setConsultationRequests(transformedRequests);
+            }
+
+            // FIXED: Get nutritionists with proper profile joining
+            const { data: nutritionistData, error: nutritionistError } = await supabase
+                .from('profiles')
                 .select(`
                     id,
-                    profile_id,
-                    specializations,
-                    hourly_rate,
+                    full_name,
+                    email,
                     bio,
+                    specialties,
+                    hourly_rate,
                     timezone,
-                    profile:profile_id(
+                    nutritionists!inner(
                         id,
-                        full_name,
-                        email
+                        specializations
                     )
-                `);
+                `)
+                .eq('role', 'nutritionist');
 
-            if (nutritionistProfiles) {
-                // Get active client counts for each nutritionist
+            console.log('Raw nutritionist data:', nutritionistData);
+            console.log('Nutritionist query error:', nutritionistError);
+
+            if (nutritionistError) {
+                console.error('Error fetching nutritionists:', nutritionistError);
+            }
+
+            if (nutritionistData && nutritionistData.length > 0) {
+                // Get active client counts for each nutritionist and transform data
                 const nutritionistsWithStats = await Promise.all(
-                    nutritionistProfiles.map(async (nutritionist) => {
-                        // Handle case where profile data comes as array from Supabase join
-                        const profileData = Array.isArray(nutritionist.profile)
-                            ? nutritionist.profile[0]
-                            : nutritionist.profile;
+                    nutritionistData.map(async (nutritionist) => {
+                        // Handle the nutritionists array from the join
+                        const nutritionistRecord = Array.isArray(nutritionist.nutritionists)
+                            ? nutritionist.nutritionists[0]
+                            : nutritionist.nutritionists;
 
-                        if (!profileData) {
-                            console.warn('No profile data found for nutritionist:', nutritionist.id);
+                        if (!nutritionistRecord) {
+                            console.warn('No nutritionist record found for profile:', nutritionist.id);
                             return null;
                         }
 
+                        // Get active client count
                         const { count } = await supabase
                             .from('nutritionist_assignments')
                             .select('*', { count: 'exact', head: true })
-                            .eq('nutritionist_id', nutritionist.profile_id)
+                            .eq('nutritionist_id', nutritionist.id)
                             .eq('status', 'active');
 
                         return {
-                            id: nutritionist.id,
-                            profile_id: nutritionist.profile_id,
-                            full_name: profileData.full_name,
-                            email: profileData.email,
-                            specializations: nutritionist.specializations || [],
-                            hourly_rate: nutritionist.hourly_rate,
+                            id: nutritionistRecord.id,
+                            profile_id: nutritionist.id,
+                            full_name: nutritionist.full_name,
+                            email: nutritionist.email,
+                            specializations: nutritionistRecord.specializations || nutritionist.specialties || [],
+                            hourly_rate: nutritionist.hourly_rate || 0,
                             bio: nutritionist.bio,
-                            timezone: nutritionist.timezone,
+                            timezone: nutritionist.timezone || 'UTC',
                             active_clients_count: count || 0
                         };
                     })
                 );
 
                 const validNutritionists = nutritionistsWithStats.filter(n => n !== null) as Nutritionist[];
+                console.log('Processed nutritionists:', validNutritionists);
                 setNutritionists(validNutritionists);
             }
         } catch (error) {
@@ -255,6 +276,15 @@ export default function AssignNutritionistsPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Debug Information */}
+            {process.env.NODE_ENV === 'development' && (
+                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-800">
+                        Debug: Found {nutritionists.length} nutritionists and {consultationRequests.length} completed consultations
+                    </p>
+                </div>
+            )}
 
             {filteredRequests.length === 0 ? (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
@@ -370,37 +400,45 @@ export default function AssignNutritionistsPage() {
                             {/* Nutritionist Selection */}
                             <div>
                                 <label className="block font-medium mb-3">Select Nutritionist</label>
-                                <div className="space-y-3 max-h-60 overflow-y-auto">
-                                    {nutritionists.map(nutritionist => (
-                                        <label key={nutritionist.profile_id} className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                                            <input
-                                                type="radio"
-                                                name="nutritionist"
-                                                value={nutritionist.profile_id}
-                                                checked={selectedNutritionist === nutritionist.profile_id}
-                                                onChange={(e) => setSelectedNutritionist(e.target.value)}
-                                                className="mt-1"
-                                            />
-                                            <div className="flex-1">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <h4 className="font-medium">{nutritionist.full_name}</h4>
-                                                    <span className="text-sm text-gray-500">
-                                                        ₹{nutritionist.hourly_rate}/hour
-                                                    </span>
+                                {nutritionists.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500">
+                                        <AlertCircle size={48} className="mx-auto mb-4" />
+                                        <p>No nutritionists available at the moment.</p>
+                                        <p className="text-sm mt-2">Please check that nutritionists have completed their profiles.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                                        {nutritionists.map(nutritionist => (
+                                            <label key={nutritionist.profile_id} className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name="nutritionist"
+                                                    value={nutritionist.profile_id}
+                                                    checked={selectedNutritionist === nutritionist.profile_id}
+                                                    onChange={(e) => setSelectedNutritionist(e.target.value)}
+                                                    className="mt-1"
+                                                />
+                                                <div className="flex-1">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <h4 className="font-medium">{nutritionist.full_name}</h4>
+                                                        <span className="text-sm text-gray-500">
+                                                            ₹{nutritionist.hourly_rate}/hour
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 mb-1">
+                                                        {nutritionist.specializations.length > 0
+                                                            ? nutritionist.specializations.join(', ')
+                                                            : 'General nutrition'
+                                                        }
+                                                    </p>
+                                                    <p className="text-xs text-gray-500">
+                                                        {nutritionist.active_clients_count} active clients • {nutritionist.timezone}
+                                                    </p>
                                                 </div>
-                                                <p className="text-sm text-gray-600 mb-1">
-                                                    {nutritionist.specializations.length > 0
-                                                        ? nutritionist.specializations.join(', ')
-                                                        : 'General nutrition'
-                                                    }
-                                                </p>
-                                                <p className="text-xs text-gray-500">
-                                                    {nutritionist.active_clients_count} active clients • {nutritionist.timezone}
-                                                </p>
-                                            </div>
-                                        </label>
-                                    ))}
-                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Assignment Reason */}
@@ -419,7 +457,7 @@ export default function AssignNutritionistsPage() {
                         <div className="flex gap-4 mt-8">
                             <button
                                 onClick={handleAssignNutritionist}
-                                disabled={!selectedNutritionist || isAssigning}
+                                disabled={!selectedNutritionist || isAssigning || nutritionists.length === 0}
                                 className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
                             >
                                 {isAssigning ? 'Assigning...' : 'Assign Nutritionist'}

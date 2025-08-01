@@ -25,7 +25,7 @@ type ConsultationRequest = {
 
 export default function ConsultationRequestsPage() {
     const supabase = createClientComponentClient();
-    const [requests, setRequests] = useState<ConsultationRequest[]>([]);
+    const [allRequests, setAllRequests] = useState<ConsultationRequest[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedRequest, setSelectedRequest] = useState<ConsultationRequest | null>(null);
@@ -38,16 +38,11 @@ export default function ConsultationRequestsPage() {
             setLoading(true);
             setError(null);
 
-            const query = supabase
+            // Fetch ALL requests first
+            const { data, error: fetchError } = await supabase
                 .from('consultation_requests')
                 .select('*')
                 .order('created_at', { ascending: false });
-
-            if (filter !== 'all') {
-                query.eq('status', filter);
-            }
-
-            const { data, error: fetchError } = await query;
 
             if (fetchError) {
                 throw fetchError;
@@ -71,18 +66,29 @@ export default function ConsultationRequestsPage() {
                 age: request.age || 0,
             })) as ConsultationRequest[];
 
-            setRequests(processedRequests);
+            setAllRequests(processedRequests);
         } catch (err) {
             console.error('Error fetching consultation requests:', err);
             setError(err instanceof Error ? err.message : 'Failed to load consultation requests');
         } finally {
             setLoading(false);
         }
-    }, [supabase, filter]);
+    }, [supabase]);
 
     useEffect(() => {
         fetchRequests();
     }, [fetchRequests]);
+
+    // Calculate counts from all requests
+    const requestCounts = {
+        pending: allRequests.filter(r => r.status === 'pending').length,
+        scheduled: allRequests.filter(r => r.status === 'scheduled').length,
+        completed: allRequests.filter(r => r.status === 'completed').length,
+        all: allRequests.length
+    };
+
+    // Filter requests based on current filter
+    const filteredRequests = allRequests.filter(r => filter === 'all' || r.status === filter);
 
     const ConsultationScheduler = ({ request, onClose }: {
         request: ConsultationRequest;
@@ -113,7 +119,7 @@ export default function ConsultationRequestsPage() {
                 if (response.ok) {
                     alert('Consultation scheduled successfully!');
                     onClose();
-                    fetchRequests();
+                    fetchRequests(); // Refresh all requests
                 } else {
                     throw new Error('Failed to schedule consultation');
                 }
@@ -281,143 +287,146 @@ export default function ConsultationRequestsPage() {
         <div className="max-w-6xl mx-auto px-4 py-8">
             <h1 className="text-3xl font-bold mb-8">Consultation Requests</h1>
 
-            {/* Filter Tabs */}
+            {/* Filter Tabs - Now with dynamic counts */}
             <div className="flex gap-4 mb-6 border-b">
-                {['pending', 'scheduled', 'completed', 'all'].map((status) => (
+                {[
+                    { key: 'pending', label: 'Pending', count: requestCounts.pending },
+                    { key: 'scheduled', label: 'Scheduled', count: requestCounts.scheduled },
+                    { key: 'completed', label: 'Completed', count: requestCounts.completed },
+                    { key: 'all', label: 'All', count: requestCounts.all }
+                ].map((tab) => (
                     <button
-                        key={status}
-                        onClick={() => setFilter(status)}
+                        key={tab.key}
+                        onClick={() => setFilter(tab.key)}
                         className={`px-4 py-2 font-medium capitalize ${
-                            filter === status
+                            filter === tab.key
                                 ? 'border-b-2 border-blue-600 text-blue-600'
                                 : 'text-gray-600 hover:text-gray-800'
                         }`}
                     >
-                        {status} ({requests.filter(r => status === 'all' || r.status === status).length})
+                        {tab.label} ({tab.count})
                     </button>
                 ))}
             </div>
 
             {/* Requests List */}
             <div className="space-y-4">
-                {requests
-                    .filter(r => filter === 'all' || r.status === filter)
-                    .map(request => {
-                        // Safe array access for rendering
-                        const preferredDays = Array.isArray(request.preferred_days) ? request.preferred_days : [];
-                        const preferredTimeSlots = Array.isArray(request.preferred_time_slots) ? request.preferred_time_slots : [];
+                {filteredRequests.map(request => {
+                    // Safe array access for rendering
+                    const preferredDays = Array.isArray(request.preferred_days) ? request.preferred_days : [];
+                    const preferredTimeSlots = Array.isArray(request.preferred_time_slots) ? request.preferred_time_slots : [];
 
-                        return (
-                            <div key={request.id} className="bg-white rounded-lg border shadow-sm">
-                                <div className="p-6">
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-4 mb-2">
-                                                <h3 className="text-xl font-semibold">{request.full_name}</h3>
-                                                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                                    request.status === 'pending'
-                                                        ? 'bg-yellow-100 text-yellow-800'
-                                                        : request.status === 'scheduled'
-                                                            ? 'bg-blue-100 text-blue-800'
-                                                            : 'bg-green-100 text-green-800'
-                                                }`}>
-                                                    {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                                                </span>
-                                                <span className="text-sm text-gray-500">
-                                                    Submitted {format(new Date(request.created_at), 'MMM dd, h:mm a')}
-                                                </span>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
-                                                <div className="flex items-center gap-2">
-                                                    <Mail size={16} className="text-gray-400" />
-                                                    <span>{request.email}</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Phone size={16} className="text-gray-400" />
-                                                    <span>{request.phone}</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <User size={16} className="text-gray-400" />
-                                                    <span>{request.age} yrs, {request.gender}</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Calendar size={16} className="text-gray-400" />
-                                                    <span>
-                                                        {preferredDays.length > 0
-                                                            ? preferredDays.slice(0, 2).join(', ') + (preferredDays.length > 2 ? '...' : '')
-                                                            : 'No preference'
-                                                        }
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {request.status === 'scheduled' && request.scheduled_date && (
-                                                <div className="bg-blue-50 rounded-lg p-3 mb-4">
-                                                    <p className="font-medium text-blue-900">
-                                                        Scheduled for: {format(new Date(request.scheduled_date), 'MMMM dd, yyyy')}
-                                                        {request.scheduled_time && ` at ${request.scheduled_time}`}
-                                                    </p>
-                                                </div>
-                                            )}
+                    return (
+                        <div key={request.id} className="bg-white rounded-lg border shadow-sm">
+                            <div className="p-6">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-4 mb-2">
+                                            <h3 className="text-xl font-semibold">{request.full_name}</h3>
+                                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                                request.status === 'pending'
+                                                    ? 'bg-yellow-100 text-yellow-800'
+                                                    : request.status === 'scheduled'
+                                                        ? 'bg-blue-100 text-blue-800'
+                                                        : 'bg-green-100 text-green-800'
+                                            }`}>
+                                                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                                            </span>
+                                            <span className="text-sm text-gray-500">
+                                                Submitted {format(new Date(request.created_at), 'MMM dd, h:mm a')}
+                                            </span>
                                         </div>
 
-                                        <div className="ml-4 flex items-center gap-2">
-                                            {request.status === 'pending' && (
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedRequest(request);
-                                                        setShowScheduler(true);
-                                                    }}
-                                                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                                                >
-                                                    Schedule Call
-                                                </button>
-                                            )}
-
-                                            <button
-                                                onClick={() => setExpandedRequest(
-                                                    expandedRequest === request.id ? null : request.id
-                                                )}
-                                                className="p-2 hover:bg-gray-100 rounded-lg"
-                                            >
-                                                {expandedRequest === request.id ?
-                                                    <ChevronUp size={20} /> :
-                                                    <ChevronDown size={20} />
-                                                }
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {expandedRequest === request.id && (
-                                        <div className="mt-4 pt-4 border-t space-y-3">
-                                            <div>
-                                                <p className="font-medium text-sm mb-1">Primary Health Goals:</p>
-                                                <p className="text-gray-600">{request.health_goals}</p>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <Mail size={16} className="text-gray-400" />
+                                                <span>{request.email}</span>
                                             </div>
-                                            {request.current_challenges && (
-                                                <div>
-                                                    <p className="font-medium text-sm mb-1">Current Challenges:</p>
-                                                    <p className="text-gray-600">{request.current_challenges}</p>
-                                                </div>
-                                            )}
-                                            <div>
-                                                <p className="font-medium text-sm mb-1">Availability:</p>
-                                                <p className="text-gray-600">
-                                                    Days: {preferredDays.length > 0 ? preferredDays.join(', ') : 'No preference'}<br />
-                                                    Times: {preferredTimeSlots.length > 0 ? preferredTimeSlots.join(', ') : 'No preference'}
+                                            <div className="flex items-center gap-2">
+                                                <Phone size={16} className="text-gray-400" />
+                                                <span>{request.phone}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <User size={16} className="text-gray-400" />
+                                                <span>{request.age} yrs, {request.gender}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Calendar size={16} className="text-gray-400" />
+                                                <span>
+                                                    {preferredDays.length > 0
+                                                        ? preferredDays.slice(0, 2).join(', ') + (preferredDays.length > 2 ? '...' : '')
+                                                        : 'No preference'
+                                                    }
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {request.status === 'scheduled' && request.scheduled_date && (
+                                            <div className="bg-blue-50 rounded-lg p-3 mb-4">
+                                                <p className="font-medium text-blue-900">
+                                                    Scheduled for: {format(new Date(request.scheduled_date), 'MMMM dd, yyyy')}
+                                                    {request.scheduled_time && ` at ${request.scheduled_time}`}
                                                 </p>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
+
+                                    <div className="ml-4 flex items-center gap-2">
+                                        {request.status === 'pending' && (
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedRequest(request);
+                                                    setShowScheduler(true);
+                                                }}
+                                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                                            >
+                                                Schedule Call
+                                            </button>
+                                        )}
+
+                                        <button
+                                            onClick={() => setExpandedRequest(
+                                                expandedRequest === request.id ? null : request.id
+                                            )}
+                                            className="p-2 hover:bg-gray-100 rounded-lg"
+                                        >
+                                            {expandedRequest === request.id ?
+                                                <ChevronUp size={20} /> :
+                                                <ChevronDown size={20} />
+                                            }
+                                        </button>
+                                    </div>
                                 </div>
+
+                                {expandedRequest === request.id && (
+                                    <div className="mt-4 pt-4 border-t space-y-3">
+                                        <div>
+                                            <p className="font-medium text-sm mb-1">Primary Health Goals:</p>
+                                            <p className="text-gray-600">{request.health_goals}</p>
+                                        </div>
+                                        {request.current_challenges && (
+                                            <div>
+                                                <p className="font-medium text-sm mb-1">Current Challenges:</p>
+                                                <p className="text-gray-600">{request.current_challenges}</p>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <p className="font-medium text-sm mb-1">Availability:</p>
+                                            <p className="text-gray-600">
+                                                Days: {preferredDays.length > 0 ? preferredDays.join(', ') : 'No preference'}<br />
+                                                Times: {preferredTimeSlots.length > 0 ? preferredTimeSlots.join(', ') : 'No preference'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        );
-                    })}
+                        </div>
+                    );
+                })}
             </div>
 
             {/* No requests message */}
-            {requests.filter(r => filter === 'all' || r.status === filter).length === 0 && (
+            {filteredRequests.length === 0 && (
                 <div className="text-center text-gray-500 py-12">
                     <h2 className="text-xl font-semibold mb-2">No {filter === 'all' ? '' : filter} requests found</h2>
                     <p>Check back later for new consultation requests.</p>
