@@ -57,115 +57,180 @@ export default function AssignProfessionalsPage() {
 
             console.log('=== FETCHING DATA FROM YOUR SCHEMA ===');
 
-            // STEP 1: Get consultation requests from consultation_requests table
-            console.log('Fetching from consultation_requests table...');
+            try {
+                // STEP 1: Get consultation requests from consultation_requests table
+                console.log('Fetching from consultation_requests table...');
 
-            // First check what statuses are available
-            const { data: statusCheck } = await supabase
-                .from('consultation_requests')
-                .select('status')
-                .limit(10);
+                // First check what statuses are available
+                const { data: statusCheck } = await supabase
+                    .from('consultation_requests')
+                    .select('status')
+                    .limit(10);
 
-            const availableStatuses = statusCheck ? [...new Set(statusCheck.map(c => c.status))] : [];
-            console.log('Available statuses:', availableStatuses);
+                const availableStatuses = statusCheck ? [...new Set(statusCheck.map(c => c.status))] : [];
+                console.log('Available statuses:', availableStatuses);
 
-            // Get consultation requests - includes both completed AND scheduled consultations
-            const { data: assignableConsultations } = await supabase
-                .from('consultation_requests')
-                .select('*')
-                .in('status', ['completed', 'scheduled', 'confirmed'])
-                .is('assigned_nutritionist_id', null)
-                .order('created_at', { ascending: false });
+                // Get consultation requests - includes both completed AND scheduled consultations
+                const { data: assignableConsultations } = await supabase
+                    .from('consultation_requests')
+                    .select('*')
+                    .in('status', ['completed', 'scheduled', 'confirmed'])
+                    .is('assigned_nutritionist_id', null)
+                    .order('created_at', { ascending: false });
 
-            if (assignableConsultations && assignableConsultations.length > 0) {
-                console.log('Found assignable consultations:', assignableConsultations.length);
+                if (assignableConsultations && assignableConsultations.length > 0) {
+                    console.log('Found assignable consultations:', assignableConsultations.length);
 
-                // Log breakdown by status
-                const statusBreakdown = assignableConsultations.reduce((acc, consultation) => {
-                    const status = consultation.status || 'unknown';
-                    acc[status] = (acc[status] || 0) + 1;
-                    return acc;
-                }, {} as Record<string, number>);
-                console.log('Consultation status breakdown:', statusBreakdown);
+                    // Log breakdown by status
+                    const statusBreakdown = assignableConsultations.reduce((acc, consultation) => {
+                        const status = consultation.status || 'unknown';
+                        acc[status] = (acc[status] || 0) + 1;
+                        return acc;
+                    }, {} as Record<string, number>);
+                    console.log('Consultation status breakdown:', statusBreakdown);
 
-                const transformedRequests: ConsultationRequest[] = assignableConsultations.map(request => ({
-                    id: request.id,
-                    // Use the consultation request ID as client_id if no actual client_id exists
-                    client_id: request.client_id || request.id,
-                    client_name: request.full_name || `Client ${request.id.slice(-4)}`,
-                    client_email: request.email || 'No email provided',
-                    health_goals: request.health_goals || 'Not specified',
-                    current_challenges: request.current_challenges || 'Not specified',
-                    status: request.status || 'pending',
-                    created_at: request.created_at,
-                    scheduled_date: request.scheduled_date,
-                    scheduled_time: request.scheduled_time,
-                    completed_at: request.completed_at
-                }));
+                    const transformedRequests: ConsultationRequest[] = assignableConsultations.map(request => {
+                        // Safely parse dates with fallbacks
+                        let createdAt = request.created_at;
+                        let scheduledDate = request.scheduled_date;
+                        let completedAt = request.completed_at;
 
-                console.log('Transformed consultation requests:', transformedRequests);
-                setConsultationRequests(transformedRequests);
-            } else {
-                console.log('No consultation requests found');
-                setConsultationRequests([]);
-            }
-
-            // STEP 2: Get professionals from profiles table
-            console.log('Fetching professionals from profiles table...');
-
-            const { data: professionalProfiles, error: profilesError } = await supabase
-                .from('profiles')
-                .select('id, full_name, email, bio, specializations, hourly_rate, timezone, role')
-                .in('role', ['nutritionist', 'trainer', 'health_coach'])
-                .not('full_name', 'is', null);
-
-            console.log('Professional profiles:', professionalProfiles);
-            console.log('Profiles error:', profilesError);
-
-            if (professionalProfiles && professionalProfiles.length > 0) {
-                // Get client counts from nutritionist_assignments table
-                const professionalsWithCounts = await Promise.all(
-                    professionalProfiles.map(async (profile) => {
-                        // Get active client count
-                        let clientCount = 0;
+                        // Validate created_at
                         try {
-                            const { count } = await supabase
-                                .from('nutritionist_assignments')
-                                .select('*', { count: 'exact', head: true })
-                                .eq('nutritionist_id', profile.id)
-                                .eq('status', 'active');
-                            clientCount = count || 0;
-                        } catch (error) {
-                            console.log('Could not fetch client count for', profile.full_name);
-                            clientCount = 0;
+                            if (createdAt) {
+                                const date = new Date(createdAt);
+                                if (isNaN(date.getTime())) {
+                                    console.warn('Invalid created_at date:', createdAt);
+                                    createdAt = new Date().toISOString();
+                                }
+                            } else {
+                                createdAt = new Date().toISOString();
+                            }
+                        } catch (e) {
+                            console.error('Error parsing created_at:', e);
+                            createdAt = new Date().toISOString();
+                        }
+
+                        // Validate scheduled_date
+                        if (scheduledDate) {
+                            try {
+                                const date = new Date(scheduledDate);
+                                if (isNaN(date.getTime())) {
+                                    console.warn('Invalid scheduled_date:', scheduledDate);
+                                    scheduledDate = undefined;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing scheduled_date:', e);
+                                scheduledDate = undefined;
+                            }
+                        }
+
+                        // Validate completed_at
+                        if (completedAt) {
+                            try {
+                                const date = new Date(completedAt);
+                                if (isNaN(date.getTime())) {
+                                    console.warn('Invalid completed_at:', completedAt);
+                                    completedAt = undefined;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing completed_at:', e);
+                                completedAt = undefined;
+                            }
                         }
 
                         return {
-                            id: profile.id,
-                            profile_id: profile.id,
-                            full_name: profile.full_name || `Unknown ${profile.role}`,
-                            email: profile.email || 'No email provided',
-                            role: profile.role as 'nutritionist' | 'trainer' | 'health_coach',
-                            specializations: Array.isArray(profile.specializations) ? profile.specializations :
-                                typeof profile.specializations === 'string' && profile.specializations ?
-                                    profile.specializations.split(',').map(s => s.trim()) : [],
-                            hourly_rate: profile.hourly_rate || 0,
-                            bio: profile.bio || '',
-                            timezone: profile.timezone || 'UTC',
-                            active_clients_count: clientCount
+                            id: request.id,
+                            // Use the consultation request ID as client_id if no actual client_id exists
+                            client_id: request.client_id || request.id,
+                            client_name: request.full_name || `Client ${request.id.slice(-4)}`,
+                            client_email: request.email || 'No email provided',
+                            health_goals: request.health_goals || 'Not specified',
+                            current_challenges: request.current_challenges || 'Not specified',
+                            status: request.status || 'pending',
+                            created_at: createdAt,
+                            scheduled_date: scheduledDate,
+                            scheduled_time: request.scheduled_time,
+                            completed_at: completedAt
                         };
-                    })
-                );
+                    });
 
-                console.log('Processed professionals with client counts:', professionalsWithCounts);
-                setProfessionals(professionalsWithCounts);
-            } else {
-                console.log('No professional profiles found');
+                    console.log('Transformed consultation requests:', transformedRequests);
+                    setConsultationRequests(transformedRequests);
+                } else {
+                    console.log('No consultation requests found');
+                    setConsultationRequests([]);
+                }
+            } catch (consultationError) {
+                console.error('Error fetching consultation requests:', consultationError);
+                setConsultationRequests([]);
+            }
+
+            try {
+                // STEP 2: Get professionals from profiles table
+                console.log('Fetching professionals from profiles table...');
+
+                const { data: professionalProfiles, error: profilesError } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, email, bio, specializations, hourly_rate, timezone, role')
+                    .in('role', ['nutritionist', 'trainer', 'health_coach'])
+                    .not('full_name', 'is', null);
+
+                console.log('Professional profiles:', professionalProfiles);
+                console.log('Profiles error:', profilesError);
+
+                if (professionalProfiles && professionalProfiles.length > 0) {
+                    // Get client counts from nutritionist_assignments table
+                    const professionalsWithCounts = await Promise.all(
+                        professionalProfiles.map(async (profile) => {
+                            // Get active client count
+                            let clientCount = 0;
+                            try {
+                                const { count } = await supabase
+                                    .from('nutritionist_assignments')
+                                    .select('*', { count: 'exact', head: true })
+                                    .eq('nutritionist_id', profile.id)
+                                    .eq('status', 'active');
+                                clientCount = count || 0;
+                            } catch (error) {
+                                console.log('Could not fetch client count for', profile.full_name);
+                                clientCount = 0;
+                            }
+
+                            return {
+                                id: profile.id,
+                                profile_id: profile.id,
+                                full_name: profile.full_name || `Unknown ${profile.role}`,
+                                email: profile.email || 'No email provided',
+                                role: profile.role as 'nutritionist' | 'trainer' | 'health_coach',
+                                specializations: Array.isArray(profile.specializations) ? profile.specializations :
+                                    typeof profile.specializations === 'string' && profile.specializations ?
+                                        profile.specializations.split(',').map(s => s.trim()) : [],
+                                hourly_rate: profile.hourly_rate || 0,
+                                bio: profile.bio || '',
+                                timezone: profile.timezone || 'UTC',
+                                active_clients_count: clientCount
+                            };
+                        })
+                    );
+
+                    console.log('Processed professionals with client counts:', professionalsWithCounts);
+                    setProfessionals(professionalsWithCounts);
+                } else {
+                    console.log('No professional profiles found');
+                    setProfessionals([]);
+                }
+            } catch (professionalsError) {
+                console.error('Error fetching professionals:', professionalsError);
                 setProfessionals([]);
             }
 
         } catch (error) {
             console.error('Error fetching data:', error);
+            // Show user-friendly error message
+            if (error instanceof Error) {
+                console.error('Error details:', error.message);
+            }
         } finally {
             setLoading(false);
         }
@@ -434,10 +499,19 @@ export default function AssignProfessionalsPage() {
                                                 </span>
                                                 <Clock size={16} className="text-gray-400" />
                                                 <span className="text-sm text-gray-500">
-                                                    {request.scheduled_date ?
-                                                        format(parseISO(request.scheduled_date), 'MMM dd') :
-                                                        format(parseISO(request.created_at), 'MMM dd')
-                                                    }
+                                                    {(() => {
+                                                        try {
+                                                            if (request.scheduled_date) {
+                                                                return format(parseISO(request.scheduled_date), 'MMM dd');
+                                                            } else if (request.created_at) {
+                                                                return format(parseISO(request.created_at), 'MMM dd');
+                                                            }
+                                                            return 'Date unknown';
+                                                        } catch (e) {
+                                                            console.error('Error formatting date:', e);
+                                                            return 'Invalid date';
+                                                        }
+                                                    })()}
                                                 </span>
                                             </div>
                                         </div>
@@ -449,8 +523,15 @@ export default function AssignProfessionalsPage() {
                                                     Scheduled Consultation
                                                 </h4>
                                                 <p className="text-sm text-blue-800">
-                                                    {format(parseISO(request.scheduled_date), 'EEEE, MMMM do, yyyy')}
-                                                    {request.scheduled_time && ` at ${request.scheduled_time}`}
+                                                    {(() => {
+                                                        try {
+                                                            const formattedDate = format(parseISO(request.scheduled_date), 'EEEE, MMMM do, yyyy');
+                                                            return `${formattedDate}${request.scheduled_time ? ` at ${request.scheduled_time}` : ''}`;
+                                                        } catch (e) {
+                                                            console.error('Error formatting scheduled date:', e);
+                                                            return 'Invalid date';
+                                                        }
+                                                    })()}
                                                 </p>
                                             </div>
                                         )}
@@ -542,7 +623,13 @@ export default function AssignProfessionalsPage() {
                                         </p>
                                     )}
                                     {selectedClient.scheduled_date && selectedClient.status === 'scheduled' && (
-                                        <p><strong>📅 Scheduled:</strong> {format(parseISO(selectedClient.scheduled_date), 'MMM dd, yyyy')} {selectedClient.scheduled_time}</p>
+                                        <p><strong>📅 Scheduled:</strong> {(() => {
+                                            try {
+                                                return format(parseISO(selectedClient.scheduled_date), 'MMM dd, yyyy');
+                                            } catch {
+                                                return 'Invalid date';
+                                            }
+                                        })()} {selectedClient.scheduled_time}</p>
                                     )}
                                 </div>
                             </div>
