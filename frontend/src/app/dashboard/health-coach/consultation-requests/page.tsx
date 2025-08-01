@@ -1,9 +1,9 @@
 // app/dashboard/health-coach/consultation-requests/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Calendar, Clock, Phone, Mail, User, CheckCircle, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, Phone, Mail, User, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
 
 type ConsultationRequest = {
@@ -33,11 +33,7 @@ export default function ConsultationRequestsPage() {
     const [filter, setFilter] = useState('pending');
     const [expandedRequest, setExpandedRequest] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchRequests();
-    }, [filter]);
-
-    const fetchRequests = async () => {
+    const fetchRequests = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
@@ -58,7 +54,7 @@ export default function ConsultationRequestsPage() {
             }
 
             // Safely process the data with null checks
-            const processedRequests = (data || []).map((request: any) => ({
+            const processedRequests = (data || []).map((request: Record<string, unknown>) => ({
                 ...request,
                 // Ensure arrays are always arrays, never null
                 preferred_days: Array.isArray(request.preferred_days) ? request.preferred_days : [],
@@ -73,7 +69,7 @@ export default function ConsultationRequestsPage() {
                 status: request.status || 'pending',
                 created_at: request.created_at || new Date().toISOString(),
                 age: request.age || 0,
-            }));
+            })) as ConsultationRequest[];
 
             setRequests(processedRequests);
         } catch (err) {
@@ -82,7 +78,11 @@ export default function ConsultationRequestsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [supabase, filter]);
+
+    useEffect(() => {
+        fetchRequests();
+    }, [fetchRequests]);
 
     const ConsultationScheduler = ({ request, onClose }: {
         request: ConsultationRequest;
