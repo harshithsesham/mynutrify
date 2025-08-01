@@ -21,25 +21,52 @@ export default function BookConsultationPage() {
         additionalInfo: ''
     });
 
+    // Update the handleSubmit function in your book-consultation page
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
 
+        // Debug: Log the form data being sent
+        console.log('Submitting form data:', formData);
+
         try {
             const response = await fetch('/api/consultation-request', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify(formData)
             });
 
-            if (response.ok) {
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                console.error('Server response:', errorData);
+                throw new Error(`Server error: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('Success response:', result);
+
+            if (result.success) {
                 setStep(3);
             } else {
-                throw new Error('Failed to submit request');
+                throw new Error(result.error || 'Failed to submit request');
             }
         } catch (error) {
             console.error('Error submitting request:', error);
-            alert('Error submitting request. Please try again.');
+
+            // More specific error messages
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                alert('Network error. Please check your internet connection and try again.');
+            } else if (error instanceof Error) {
+                alert(`Error: ${error.message}`);
+            } else {
+                alert('Error submitting request. Please try again.');
+            }
         } finally {
             setIsSubmitting(false);
         }
