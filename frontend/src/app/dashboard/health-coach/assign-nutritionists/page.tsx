@@ -1,10 +1,10 @@
 // app/dashboard/health-coach/assign-nutritionists/page.tsx
-// Optimized for your exact database schema
+// Fixed to work with actual database schema and include scheduled consultations
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { User, Users, Clock, CheckCircle, AlertCircle, Search } from 'lucide-react';
+import { User, Users, Clock, CheckCircle, AlertCircle, Search, Calendar } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 type ConsultationRequest = {
@@ -17,6 +17,7 @@ type ConsultationRequest = {
     status: string;
     created_at: string;
     scheduled_date?: string;
+    scheduled_time?: string;
     completed_at?: string;
 };
 
@@ -62,57 +63,43 @@ export default function AssignProfessionalsPage() {
             // First check what statuses are available
             const { data: statusCheck } = await supabase
                 .from('consultation_requests')
-                .select('consultation_status')
+                .select('status')
                 .limit(10);
 
-            const availableStatuses = statusCheck ? [...new Set(statusCheck.map(c => c.consultation_status))] : [];
-            console.log('Available consultation statuses:', availableStatuses);
+            const availableStatuses = statusCheck ? [...new Set(statusCheck.map(c => c.status))] : [];
+            console.log('Available statuses:', availableStatuses);
 
-            // Get consultation requests - UPDATED to include scheduled consultations for assignment
-            let consultationData = null;
-
-            // CHANGED: Now includes both completed AND scheduled consultations that can be assigned
+            // Get consultation requests - includes both completed AND scheduled consultations
             const { data: assignableConsultations } = await supabase
                 .from('consultation_requests')
                 .select('*')
-                .in('consultation_status', ['completed', 'scheduled', 'confirmed'])
+                .in('status', ['completed', 'scheduled', 'confirmed'])
                 .is('assigned_nutritionist_id', null)
                 .order('created_at', { ascending: false });
 
             if (assignableConsultations && assignableConsultations.length > 0) {
-                consultationData = assignableConsultations;
-                console.log('Found assignable consultations (completed + scheduled):', consultationData.length);
+                console.log('Found assignable consultations:', assignableConsultations.length);
 
                 // Log breakdown by status
-                const statusBreakdown = consultationData.reduce((acc, consultation) => {
-                    const status = consultation.consultation_status || 'unknown';
+                const statusBreakdown = assignableConsultations.reduce((acc, consultation) => {
+                    const status = consultation.status || 'unknown';
                     acc[status] = (acc[status] || 0) + 1;
                     return acc;
-                }, {});
+                }, {} as Record<string, number>);
                 console.log('Consultation status breakdown:', statusBreakdown);
-            } else {
-                // Fallback: get ANY consultation without assigned nutritionist
-                const { data: anyConsultations } = await supabase
-                    .from('consultation_requests')
-                    .select('*')
-                    .is('assigned_nutritionist_id', null)
-                    .order('created_at', { ascending: false });
 
-                consultationData = anyConsultations;
-                console.log('Found any unassigned consultations:', consultationData?.length || 0);
-            }
-
-            if (consultationData && consultationData.length > 0) {
-                const transformedRequests: ConsultationRequest[] = consultationData.map(request => ({
+                const transformedRequests: ConsultationRequest[] = assignableConsultations.map(request => ({
                     id: request.id,
+                    // Use the consultation request ID as client_id if no actual client_id exists
                     client_id: request.client_id || request.id,
                     client_name: request.full_name || `Client ${request.id.slice(-4)}`,
                     client_email: request.email || 'No email provided',
                     health_goals: request.health_goals || 'Not specified',
                     current_challenges: request.current_challenges || 'Not specified',
-                    status: request.consultation_status || request.status,
+                    status: request.status || 'pending',
                     created_at: request.created_at,
                     scheduled_date: request.scheduled_date,
+                    scheduled_time: request.scheduled_time,
                     completed_at: request.completed_at
                 }));
 
@@ -126,21 +113,20 @@ export default function AssignProfessionalsPage() {
             // STEP 2: Get professionals from profiles table
             console.log('Fetching professionals from profiles table...');
 
-            // Based on your schema, profiles table has: specializations, hourly_rate, timezone, full_name, bio, email
             const { data: professionalProfiles, error: profilesError } = await supabase
                 .from('profiles')
                 .select('id, full_name, email, bio, specializations, hourly_rate, timezone, role')
                 .in('role', ['nutritionist', 'trainer', 'health_coach'])
                 .not('full_name', 'is', null);
 
-            console.log('Professional profiles from your schema:', professionalProfiles);
+            console.log('Professional profiles:', professionalProfiles);
             console.log('Profiles error:', profilesError);
 
             if (professionalProfiles && professionalProfiles.length > 0) {
                 // Get client counts from nutritionist_assignments table
                 const professionalsWithCounts = await Promise.all(
                     professionalProfiles.map(async (profile) => {
-                        // Get active client count from nutritionist_assignments
+                        // Get active client count
                         let clientCount = 0;
                         try {
                             const { count } = await supabase
@@ -157,7 +143,7 @@ export default function AssignProfessionalsPage() {
                         return {
                             id: profile.id,
                             profile_id: profile.id,
-                            full_name: profile.full_name || `${profile.role || 'Professional'}`,
+                            full_name: profile.full_name || `Unknown ${profile.role}`,
                             email: profile.email || 'No email provided',
                             role: profile.role as 'nutritionist' | 'trainer' | 'health_coach',
                             specializations: Array.isArray(profile.specializations) ? profile.specializations :
@@ -202,7 +188,7 @@ export default function AssignProfessionalsPage() {
             console.log('Client:', selectedClient);
             console.log('Professional ID:', selectedProfessional);
 
-            // OPTION 1: Try the API endpoint first
+            // Try the API endpoint first
             try {
                 const response = await fetch('/api/health-coach/assign-nutritionist', {
                     method: 'POST',
@@ -215,22 +201,30 @@ export default function AssignProfessionalsPage() {
                     })
                 });
 
+                const result = await response.json();
+
                 if (response.ok) {
-                    const result = await response.json();
                     console.log('API assignment successful:', result);
-                    alert('Professional assigned successfully via API!');
+                    alert('Professional assigned successfully!');
                     setShowAssignModal(false);
                     setSelectedClient(null);
                     setSelectedProfessional('');
                     setAssignmentReason('');
                     fetchData();
                     return;
+                } else {
+                    // Check if it's because the client doesn't have an account
+                    if (result.error && result.error.includes('Client does not have an account')) {
+                        alert('This client needs to create an account first before they can be assigned a nutritionist. They will receive instructions via email after their consultation.');
+                    } else {
+                        throw new Error(result.error || 'Failed to assign nutritionist');
+                    }
                 }
             } catch (apiError) {
                 console.log('API failed, trying direct database update...');
             }
 
-            // OPTION 2: Direct database update using your schema
+            // Fallback: Direct database update
             console.log('Updating consultation_requests table directly...');
 
             const { data: updateResult, error: updateError } = await supabase
@@ -248,7 +242,7 @@ export default function AssignProfessionalsPage() {
 
             console.log('Consultation updated successfully:', updateResult);
 
-            // OPTION 3: Create assignment record in nutritionist_assignments table
+            // Create assignment record in nutritionist_assignments table
             try {
                 const { data: assignmentResult, error: assignmentError } = await supabase
                     .from('nutritionist_assignments')
@@ -304,7 +298,8 @@ export default function AssignProfessionalsPage() {
             return (
                 specs.includes('weight') || specs.includes('diet') || specs.includes('nutrition') ||
                 specs.includes('diabetes') || specs.includes('pcos') || specs.includes('thyroid') ||
-                goals.includes('weight') || goals.includes('diet') || goals.includes('nutrition')
+                goals.includes('weight') || goals.includes('diet') || goals.includes('nutrition') ||
+                challenges.includes('diabetes') || challenges.includes('pcos') || challenges.includes('thyroid')
             );
         });
 
@@ -313,14 +308,15 @@ export default function AssignProfessionalsPage() {
             if (professional.role !== 'trainer') return false;
             return (
                 goals.includes('muscle') || goals.includes('fitness') || goals.includes('exercise') ||
-                goals.includes('strength') || goals.includes('workout') || goals.includes('training')
+                goals.includes('strength') || goals.includes('workout') || goals.includes('training') ||
+                challenges.includes('weak') || challenges.includes('strength') || challenges.includes('stamina')
             );
         });
 
         // Find health coach for general wellness
         const healthCoach = professionals.find(professional => {
             if (professional.role !== 'health_coach') return false;
-            return true; // Health coaches can handle general cases
+            return true;
         });
 
         return nutritionist || trainer || healthCoach || professionals[0];
@@ -339,7 +335,7 @@ export default function AssignProfessionalsPage() {
             <div className="mb-8">
                 <h1 className="text-3xl font-bold mb-2">Assign Professionals</h1>
                 <p className="text-gray-600">
-                    Assign nutritionists, trainers, or health coaches to clients who have scheduled or completed consultations
+                    Assign nutritionists, trainers, or health coaches to clients who have completed or scheduled consultations
                 </p>
             </div>
 
@@ -369,55 +365,26 @@ export default function AssignProfessionalsPage() {
                 </div>
             </div>
 
-            {/* Schema-Optimized Debug Information */}
+            {/* Status Information */}
             <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-sm text-blue-800 font-medium">
-                    📊 Database Status: {professionals.length} professionals • {consultationRequests.length} consultations
+                    📊 Database Status: {professionals.length} professionals • {consultationRequests.length} consultations ready for assignment
                 </p>
                 <div className="mt-2 text-sm space-y-2">
-                    {professionals.length > 0 ? (
-                        <div className="text-green-600">
-                            <p className="font-medium">✅ Professionals loaded from your profiles table:</p>
-                            <div className="ml-4 text-xs space-y-1">
-                                {professionals.map(p => (
-                                    <div key={p.id} className="flex items-center gap-2">
-                                        <span className={`px-2 py-1 rounded-full text-white text-xs ${
-                                            p.role === 'nutritionist' ? 'bg-green-500' :
-                                                p.role === 'trainer' ? 'bg-blue-500' : 'bg-purple-500'
-                                        }`}>
-                                            {p.role}
-                                        </span>
-                                        <span className="font-medium">{p.full_name}</span>
-                                        <span className="text-gray-500">({p.email})</span>
-                                        <span className="text-gray-400">₹{p.hourly_rate}/hr</span>
-                                        {p.specializations.length > 0 && (
-                                            <span className="text-gray-500 text-xs">• {p.specializations.slice(0,2).join(', ')}</span>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-red-600">
-                            <p className="font-medium">❌ No professionals found in profiles table</p>
-                            <p className="text-xs ml-4">Check that profiles table has users with role = &apos;nutritionist&apos;, &apos;trainer&apos;, or &apos;health_coach&apos;</p>
-                        </div>
-                    )}
-
-                    {consultationRequests.length > 0 ? (
+                    {consultationRequests.length > 0 && (
                         <div className="text-green-600">
                             <p className="font-medium">✅ Consultations available for assignment:</p>
                             <p className="text-xs ml-4">
-                                Found: {[...new Set(consultationRequests.map(r => r.status))].map(status =>
+                                Status breakdown: {[...new Set(consultationRequests.map(r => r.status))].map(status =>
                                 `${status} (${consultationRequests.filter(r => r.status === status).length})`
                             ).join(', ')}
                             </p>
                         </div>
-                    ) : (
-                        <div className="text-orange-600">
-                            <p className="font-medium">⚠️ No consultations available for assignment</p>
-                            <p className="text-xs ml-4">Looking for consultations with status: completed, scheduled, or confirmed</p>
-                        </div>
+                    )}
+                    {consultationRequests.length === 0 && (
+                        <p className="text-orange-600">
+                            ⚠️ No consultations available for assignment. Looking for consultations with status: completed or scheduled
+                        </p>
                     )}
                 </div>
             </div>
@@ -474,6 +441,19 @@ export default function AssignProfessionalsPage() {
                                                 </span>
                                             </div>
                                         </div>
+
+                                        {request.scheduled_date && request.status === 'scheduled' && (
+                                            <div className="bg-blue-50 rounded-xl p-4 border border-blue-100 mb-4">
+                                                <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                                                    <Calendar size={16} />
+                                                    Scheduled Consultation
+                                                </h4>
+                                                <p className="text-sm text-blue-800">
+                                                    {format(parseISO(request.scheduled_date), 'EEEE, MMMM do, yyyy')}
+                                                    {request.scheduled_time && ` at ${request.scheduled_time}`}
+                                                </p>
+                                            </div>
+                                        )}
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                             <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
@@ -555,7 +535,15 @@ export default function AssignProfessionalsPage() {
                                 <div className="text-sm text-gray-600 space-y-2">
                                     <p><strong>🎯 Goals:</strong> {selectedClient.health_goals}</p>
                                     <p><strong>⚠️ Challenges:</strong> {selectedClient.current_challenges}</p>
-                                    <p><strong>📊 Status:</strong> {selectedClient.status}</p>
+                                    <p><strong>📧 Email:</strong> {selectedClient.client_email}</p>
+                                    {selectedClient.client_id === selectedClient.id && (
+                                        <p className="text-orange-600 text-xs mt-2">
+                                            ⚠️ Note: This client hasn&apos;t created an account yet. They need to sign up before assignment.
+                                        </p>
+                                    )}
+                                    {selectedClient.scheduled_date && selectedClient.status === 'scheduled' && (
+                                        <p><strong>📅 Scheduled:</strong> {format(parseISO(selectedClient.scheduled_date), 'MMM dd, yyyy')} {selectedClient.scheduled_time}</p>
+                                    )}
                                 </div>
                             </div>
 

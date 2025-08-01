@@ -1,11 +1,10 @@
-
 // frontend/src/app/dashboard/page.tsx
-// Updated version that includes consultation requests for health coaches
+// Fixed version that properly shows scheduled consultations for health coaches
 
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import DashboardClient from './DashboardClient'; // Import the client component
+import DashboardClient from './DashboardClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +25,6 @@ export default async function DashboardPage() {
         redirect('/login');
     }
 
-    // Fetch the user's profile, including the profile's own `id` column.
     const { data: profile } = await supabase
         .from('profiles')
         .select('id, role, full_name')
@@ -68,24 +66,41 @@ export default async function DashboardPage() {
 
             if (healthCoachData) {
                 // Get scheduled consultations
-                const { data: consultations } = await supabase
+                const today = new Date().toISOString().split('T')[0];
+                console.log('Fetching consultations for health coach:', healthCoachData.id);
+                console.log('Today date:', today);
+
+                const { data: consultations, error: consultationError } = await supabase
                     .from('consultation_requests')
-                    .select('id, client_name, scheduled_date, scheduled_time, meeting_link, meeting_type')
+                    .select('id, full_name, email, scheduled_date, scheduled_time, meeting_link, meeting_type')
                     .eq('status', 'scheduled')
                     .eq('scheduled_by', healthCoachData.id)
                     .not('scheduled_date', 'is', null)
-                    .gte('scheduled_date', new Date().toISOString().split('T')[0])
+                    .gte('scheduled_date', today)
                     .order('scheduled_date', { ascending: true })
+                    .order('scheduled_time', { ascending: true })
                     .limit(3);
 
+                console.log('Consultation query result:', consultations);
+                console.log('Consultation query error:', consultationError);
+
                 // Transform consultation requests to match appointment format
-                const consultationAppointments: AppointmentWithOtherParty[] = (consultations || []).map(consultation => ({
-                    id: `consultation_${consultation.id}`, // Prefix to distinguish from regular appointments
-                    start_time: `${consultation.scheduled_date}T${consultation.scheduled_time || '09:00'}:00`,
-                    client: { full_name: consultation.client_name || 'Unknown Client' },
-                    meeting_link: consultation.meeting_link || undefined,
-                    session_type: 'Health Consultation'
-                }));
+                const consultationAppointments: AppointmentWithOtherParty[] = (consultations || []).map(consultation => {
+                    // Combine date and time for start_time
+                    const dateTime = consultation.scheduled_time
+                        ? `${consultation.scheduled_date}T${consultation.scheduled_time}:00`
+                        : `${consultation.scheduled_date}T09:00:00`;
+
+                    return {
+                        id: `consultation_${consultation.id}`,
+                        start_time: dateTime,
+                        client: { full_name: consultation.full_name || consultation.email || 'Unknown Client' },
+                        meeting_link: consultation.meeting_link || undefined,
+                        session_type: 'Health Consultation'
+                    };
+                });
+
+                console.log('Transformed consultations:', consultationAppointments);
 
                 // Also get any direct appointments if health coach has them
                 const { data: directAppointments } = await supabase

@@ -1,6 +1,4 @@
-// 🔧 FIX 1: Update the schedule-consultation API to create proper Google Meet links
-
-// Update: frontend/src/app/api/health-coach/schedule-consultation/route.ts
+// frontend/src/app/api/health-coach/schedule-consultation/route.ts
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
@@ -40,95 +38,106 @@ export async function POST(req: NextRequest) {
         // Get consultation request details
         const { data: consultationRequest } = await supabase
             .from('consultation_requests')
-            .select('client_name, client_email')
+            .select('full_name, email')
             .eq('id', requestId)
             .single();
 
-        // Create appointment record first
-        const startDateTime = `${scheduledDate}T${scheduledTime}:00`;
-        const endDateTime = new Date(new Date(startDateTime).getTime() + 60 * 60 * 1000).toISOString(); // 1 hour later
-
-        const { data: appointment, error: appointmentError } = await supabase
-            .from('appointments')
-            .insert({
-                professional_id: profile.id,
-                client_email: consultationRequest?.client_email || '',
-                start_time: startDateTime,
-                end_time: endDateTime,
-                status: 'confirmed',
-                session_type: 'consultation',
-                meeting_link: null, // Will be updated after Google Meet creation
-                session_notes: notes,
-                price: 0,
-                is_first_consult: true
-            })
-            .select()
-            .single();
-
-        if (appointmentError) {
-            console.error('Error creating appointment:', appointmentError);
-        }
-
+        // Create appointment record if meeting type is video
         let meetingLink = null;
+        let appointmentId = null;
 
-        // Create Google Meet link if meeting type is video and we have Google integration
-        if (meetingType === 'video' && appointment) {
-            try {
-                const meetingResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/create-meeting`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        appointmentId: appointment.id,
-                        professionalProfileId: profile.id,
-                        clientEmail: consultationRequest?.client_email || '',
-                        startTime: startDateTime,
-                        endTime: endDateTime,
-                    }),
-                });
+        if (meetingType === 'video') {
+            const startDateTime = `${scheduledDate}T${scheduledTime}:00`;
+            const endDateTime = new Date(new Date(startDateTime).getTime() + 60 * 60 * 1000).toISOString();
 
-                if (meetingResponse.ok) {
-                    const { meetingLink: generatedLink } = await meetingResponse.json();
-                    meetingLink = generatedLink;
-                } else {
-                    console.error('Failed to create Google Meet link');
-                    meetingLink = 'Google Meet link creation failed - will be sent separately';
+            const { data: appointment, error: appointmentError } = await supabase
+                .from('appointments')
+                .insert({
+                    professional_id: profile.id,
+                    client_email: consultationRequest?.email || '',
+                    start_time: startDateTime,
+                    end_time: endDateTime,
+                    status: 'confirmed',
+                    session_type: 'consultation',
+                    meeting_link: null,
+                    session_notes: notes,
+                    price: 0,
+                    is_first_consult: true
+                })
+                .select()
+                .single();
+
+            if (!appointmentError && appointment) {
+                appointmentId = appointment.id;
+
+                // Try to create Google Meet link
+                try {
+                    const meetingResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/create-meeting`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            appointmentId: appointment.id,
+                            professionalProfileId: profile.id,
+                            clientEmail: consultationRequest?.email || '',
+                            startTime: startDateTime,
+                            endTime: endDateTime,
+                        }),
+                    });
+
+                    if (meetingResponse.ok) {
+                        const { meetingLink: generatedLink } = await meetingResponse.json();
+                        meetingLink = generatedLink;
+                    } else {
+                        console.error('Failed to create Google Meet link');
+                        meetingLink = 'Google Meet link will be sent separately';
+                    }
+                } catch (error) {
+                    console.error('Error creating meeting link:', error);
+                    meetingLink = 'Google Meet link will be sent separately';
                 }
-            } catch (error) {
-                console.error('Error creating meeting link:', error);
-                meetingLink = 'Google Meet link creation failed - will be sent separately';
             }
         }
 
-        // Update consultation request
+        // Update consultation request with scheduled details
+        const updateData = {
+            status: 'scheduled',
+            scheduled_date: scheduledDate,
+            scheduled_time: scheduledTime,
+            scheduled_by: healthCoach.id,
+            meeting_type: meetingType,
+            pre_consultation_notes: notes,
+            meeting_link: meetingLink,
+            updated_at: new Date().toISOString()
+        };
+
+        console.log('Updating consultation request with:', updateData);
+
         const { data: updatedRequest, error } = await supabase
             .from('consultation_requests')
-            .update({
-                status: 'scheduled',
-                scheduled_date: scheduledDate,
-                scheduled_time: scheduledTime,
-                scheduled_by: healthCoach.id,
-                meeting_type: meetingType,
-                pre_consultation_notes: notes,
-                meeting_link: meetingLink
-            })
+            .update(updateData)
             .eq('id', requestId)
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('Error updating consultation request:', error);
+            throw error;
+        }
 
-        // Update appointment with meeting link
-        if (appointment && meetingLink) {
+        // Update appointment with meeting link if we have one
+        if (appointmentId && meetingLink && meetingLink !== 'Google Meet link will be sent separately') {
             await supabase
                 .from('appointments')
                 .update({ meeting_link: meetingLink })
-                .eq('id', appointment.id);
+                .eq('id', appointmentId);
         }
+
+        // TODO: Send notification email to client
 
         return NextResponse.json({
             success: true,
             consultation: updatedRequest,
-            appointment: appointment,
+            appointmentId: appointmentId,
             meetingLink: meetingLink
         });
     } catch (error) {
