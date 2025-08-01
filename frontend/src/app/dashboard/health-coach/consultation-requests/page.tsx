@@ -27,6 +27,7 @@ export default function ConsultationRequestsPage() {
     const supabase = createClientComponentClient();
     const [requests, setRequests] = useState<ConsultationRequest[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [selectedRequest, setSelectedRequest] = useState<ConsultationRequest | null>(null);
     const [showScheduler, setShowScheduler] = useState(false);
     const [filter, setFilter] = useState('pending');
@@ -37,22 +38,50 @@ export default function ConsultationRequestsPage() {
     }, [filter]);
 
     const fetchRequests = async () => {
-        setLoading(true);
-        const query = supabase
-            .from('consultation_requests')
-            .select('*')
-            .order('created_at', { ascending: false });
+        try {
+            setLoading(true);
+            setError(null);
 
-        if (filter !== 'all') {
-            query.eq('status', filter);
+            const query = supabase
+                .from('consultation_requests')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (filter !== 'all') {
+                query.eq('status', filter);
+            }
+
+            const { data, error: fetchError } = await query;
+
+            if (fetchError) {
+                throw fetchError;
+            }
+
+            // Safely process the data with null checks
+            const processedRequests = (data || []).map((request: any) => ({
+                ...request,
+                // Ensure arrays are always arrays, never null
+                preferred_days: Array.isArray(request.preferred_days) ? request.preferred_days : [],
+                preferred_time_slots: Array.isArray(request.preferred_time_slots) ? request.preferred_time_slots : [],
+                // Ensure strings are never null
+                full_name: request.full_name || 'Unknown Name',
+                email: request.email || '',
+                phone: request.phone || '',
+                health_goals: request.health_goals || '',
+                current_challenges: request.current_challenges || '',
+                gender: request.gender || '',
+                status: request.status || 'pending',
+                created_at: request.created_at || new Date().toISOString(),
+                age: request.age || 0,
+            }));
+
+            setRequests(processedRequests);
+        } catch (err) {
+            console.error('Error fetching consultation requests:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load consultation requests');
+        } finally {
+            setLoading(false);
         }
-
-        const { data, error } = await query;
-
-        if (!error && data) {
-            setRequests(data);
-        }
-        setLoading(false);
     };
 
     const ConsultationScheduler = ({ request, onClose }: {
@@ -89,11 +118,16 @@ export default function ConsultationRequestsPage() {
                     throw new Error('Failed to schedule consultation');
                 }
             } catch (error) {
+                console.error('Error scheduling consultation:', error);
                 alert('Error scheduling consultation. Please try again.');
             } finally {
                 setIsScheduling(false);
             }
         };
+
+        // Safe array access for preferred days/times
+        const preferredDays = Array.isArray(request.preferred_days) ? request.preferred_days : [];
+        const preferredTimeSlots = Array.isArray(request.preferred_time_slots) ? request.preferred_time_slots : [];
 
         return (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -124,12 +158,14 @@ export default function ConsultationRequestsPage() {
                             <p className="font-medium">Health Goals:</p>
                             <p className="text-sm text-gray-600">{request.health_goals}</p>
                         </div>
-                        <div className="mt-2">
-                            <p className="font-medium">Preferred Times:</p>
-                            <p className="text-sm text-gray-600">
-                                {request.preferred_days.join(', ')} - {request.preferred_time_slots.join(', ')}
-                            </p>
-                        </div>
+                        {(preferredDays.length > 0 || preferredTimeSlots.length > 0) && (
+                            <div className="mt-2">
+                                <p className="font-medium">Preferred Times:</p>
+                                <p className="text-sm text-gray-600">
+                                    {preferredDays.length > 0 ? preferredDays.join(', ') : 'No day preference'} - {preferredTimeSlots.length > 0 ? preferredTimeSlots.join(', ') : 'No time preference'}
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-4">
@@ -211,6 +247,28 @@ export default function ConsultationRequestsPage() {
         );
     };
 
+    // Error state
+    if (error) {
+        return (
+            <div className="max-w-6xl mx-auto px-4 py-8">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+                    <h1 className="text-xl font-bold text-red-800 mb-2">Error Loading Consultation Requests</h1>
+                    <p className="text-red-700 mb-4">{error}</p>
+                    <button
+                        onClick={() => {
+                            setError(null);
+                            fetchRequests();
+                        }}
+                        className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                    >
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Loading state
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
@@ -244,108 +302,127 @@ export default function ConsultationRequestsPage() {
             <div className="space-y-4">
                 {requests
                     .filter(r => filter === 'all' || r.status === filter)
-                    .map(request => (
-                        <div key={request.id} className="bg-white rounded-lg border shadow-sm">
-                            <div className="p-6">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-4 mb-2">
-                                            <h3 className="text-xl font-semibold">{request.full_name}</h3>
-                                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                                request.status === 'pending'
-                                                    ? 'bg-yellow-100 text-yellow-800'
-                                                    : request.status === 'scheduled'
-                                                        ? 'bg-blue-100 text-blue-800'
-                                                        : 'bg-green-100 text-green-800'
-                                            }`}>
-                                                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                                            </span>
-                                            <span className="text-sm text-gray-500">
-                                                Submitted {format(new Date(request.created_at), 'MMM dd, h:mm a')}
-                                            </span>
+                    .map(request => {
+                        // Safe array access for rendering
+                        const preferredDays = Array.isArray(request.preferred_days) ? request.preferred_days : [];
+                        const preferredTimeSlots = Array.isArray(request.preferred_time_slots) ? request.preferred_time_slots : [];
+
+                        return (
+                            <div key={request.id} className="bg-white rounded-lg border shadow-sm">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-4 mb-2">
+                                                <h3 className="text-xl font-semibold">{request.full_name}</h3>
+                                                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                                    request.status === 'pending'
+                                                        ? 'bg-yellow-100 text-yellow-800'
+                                                        : request.status === 'scheduled'
+                                                            ? 'bg-blue-100 text-blue-800'
+                                                            : 'bg-green-100 text-green-800'
+                                                }`}>
+                                                    {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                                                </span>
+                                                <span className="text-sm text-gray-500">
+                                                    Submitted {format(new Date(request.created_at), 'MMM dd, h:mm a')}
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
+                                                <div className="flex items-center gap-2">
+                                                    <Mail size={16} className="text-gray-400" />
+                                                    <span>{request.email}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Phone size={16} className="text-gray-400" />
+                                                    <span>{request.phone}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <User size={16} className="text-gray-400" />
+                                                    <span>{request.age} yrs, {request.gender}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Calendar size={16} className="text-gray-400" />
+                                                    <span>
+                                                        {preferredDays.length > 0
+                                                            ? preferredDays.slice(0, 2).join(', ') + (preferredDays.length > 2 ? '...' : '')
+                                                            : 'No preference'
+                                                        }
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {request.status === 'scheduled' && request.scheduled_date && (
+                                                <div className="bg-blue-50 rounded-lg p-3 mb-4">
+                                                    <p className="font-medium text-blue-900">
+                                                        Scheduled for: {format(new Date(request.scheduled_date), 'MMMM dd, yyyy')}
+                                                        {request.scheduled_time && ` at ${request.scheduled_time}`}
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
 
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
-                                            <div className="flex items-center gap-2">
-                                                <Mail size={16} className="text-gray-400" />
-                                                <span>{request.email}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Phone size={16} className="text-gray-400" />
-                                                <span>{request.phone}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <User size={16} className="text-gray-400" />
-                                                <span>{request.age} yrs, {request.gender}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Calendar size={16} className="text-gray-400" />
-                                                <span>{request.preferred_days.slice(0, 2).join(', ')}...</span>
-                                            </div>
-                                        </div>
+                                        <div className="ml-4 flex items-center gap-2">
+                                            {request.status === 'pending' && (
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedRequest(request);
+                                                        setShowScheduler(true);
+                                                    }}
+                                                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                                                >
+                                                    Schedule Call
+                                                </button>
+                                            )}
 
-                                        {request.status === 'scheduled' && request.scheduled_date && (
-                                            <div className="bg-blue-50 rounded-lg p-3 mb-4">
-                                                <p className="font-medium text-blue-900">
-                                                    Scheduled for: {format(new Date(request.scheduled_date), 'MMMM dd, yyyy')}
-                                                    at {request.scheduled_time}
+                                            <button
+                                                onClick={() => setExpandedRequest(
+                                                    expandedRequest === request.id ? null : request.id
+                                                )}
+                                                className="p-2 hover:bg-gray-100 rounded-lg"
+                                            >
+                                                {expandedRequest === request.id ?
+                                                    <ChevronUp size={20} /> :
+                                                    <ChevronDown size={20} />
+                                                }
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {expandedRequest === request.id && (
+                                        <div className="mt-4 pt-4 border-t space-y-3">
+                                            <div>
+                                                <p className="font-medium text-sm mb-1">Primary Health Goals:</p>
+                                                <p className="text-gray-600">{request.health_goals}</p>
+                                            </div>
+                                            {request.current_challenges && (
+                                                <div>
+                                                    <p className="font-medium text-sm mb-1">Current Challenges:</p>
+                                                    <p className="text-gray-600">{request.current_challenges}</p>
+                                                </div>
+                                            )}
+                                            <div>
+                                                <p className="font-medium text-sm mb-1">Availability:</p>
+                                                <p className="text-gray-600">
+                                                    Days: {preferredDays.length > 0 ? preferredDays.join(', ') : 'No preference'}<br />
+                                                    Times: {preferredTimeSlots.length > 0 ? preferredTimeSlots.join(', ') : 'No preference'}
                                                 </p>
                                             </div>
-                                        )}
-                                    </div>
-
-                                    <div className="ml-4 flex items-center gap-2">
-                                        {request.status === 'pending' && (
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedRequest(request);
-                                                    setShowScheduler(true);
-                                                }}
-                                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                                            >
-                                                Schedule Call
-                                            </button>
-                                        )}
-
-                                        <button
-                                            onClick={() => setExpandedRequest(
-                                                expandedRequest === request.id ? null : request.id
-                                            )}
-                                            className="p-2 hover:bg-gray-100 rounded-lg"
-                                        >
-                                            {expandedRequest === request.id ?
-                                                <ChevronUp size={20} /> :
-                                                <ChevronDown size={20} />
-                                            }
-                                        </button>
-                                    </div>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {expandedRequest === request.id && (
-                                    <div className="mt-4 pt-4 border-t space-y-3">
-                                        <div>
-                                            <p className="font-medium text-sm mb-1">Primary Health Goals:</p>
-                                            <p className="text-gray-600">{request.health_goals}</p>
-                                        </div>
-                                        {request.current_challenges && (
-                                            <div>
-                                                <p className="font-medium text-sm mb-1">Current Challenges:</p>
-                                                <p className="text-gray-600">{request.current_challenges}</p>
-                                            </div>
-                                        )}
-                                        <div>
-                                            <p className="font-medium text-sm mb-1">Availability:</p>
-                                            <p className="text-gray-600">
-                                                Days: {request.preferred_days.join(', ')}<br />
-                                                Times: {request.preferred_time_slots.join(', ')}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
             </div>
+
+            {/* No requests message */}
+            {requests.filter(r => filter === 'all' || r.status === filter).length === 0 && (
+                <div className="text-center text-gray-500 py-12">
+                    <h2 className="text-xl font-semibold mb-2">No {filter === 'all' ? '' : filter} requests found</h2>
+                    <p>Check back later for new consultation requests.</p>
+                </div>
+            )}
 
             {showScheduler && selectedRequest && (
                 <ConsultationScheduler
