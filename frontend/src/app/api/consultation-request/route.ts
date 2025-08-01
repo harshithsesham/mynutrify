@@ -1,9 +1,14 @@
 // app/api/consultation-request/route.ts
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Enable CORS for all origins (you can restrict this in production)
+// Create a PUBLIC Supabase client (not using cookies/auth)
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+// Enable CORS for all origins
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -66,9 +71,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Create Supabase client
-        const supabase = createRouteHandlerClient({ cookies });
-        console.log('📡 Supabase client created');
+        console.log('📡 Using PUBLIC Supabase client for form submission');
 
         // Prepare data for insertion
         const insertData = {
@@ -98,6 +101,7 @@ export async function POST(req: NextRequest) {
             .single();
 
         if (existingRequest) {
+            console.log('⚠️ Duplicate email found:', existingRequest.email);
             return NextResponse.json(
                 {
                     success: false,
@@ -107,7 +111,9 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Insert into database
+        console.log('💫 Attempting to insert data with PUBLIC client...');
+
+        // Insert into database using PUBLIC client
         const { data: consultationRequest, error: insertError } = await supabase
             .from('consultation_requests')
             .insert(insertData)
@@ -128,18 +134,24 @@ export async function POST(req: NextRequest) {
             if (insertError.code === '23505') {
                 errorMessage = 'A request with this email already exists';
             } else if (insertError.code === '42501') {
-                errorMessage = 'Permission denied - database access issue';
+                errorMessage = 'Database permission issue - please contact support';
             } else if (insertError.code === '42P01') {
-                errorMessage = 'Database table not found';
+                errorMessage = 'Database table not found - please contact support';
             } else if (insertError.message.includes('violates')) {
                 errorMessage = 'Invalid data provided';
+            } else if (insertError.message.includes('RLS')) {
+                errorMessage = 'Database access denied - RLS policy issue';
             }
 
             return NextResponse.json(
                 {
                     success: false,
                     error: errorMessage,
-                    details: process.env.NODE_ENV === 'development' ? insertError.message : undefined
+                    debug: process.env.NODE_ENV === 'development' ? {
+                        code: insertError.code,
+                        message: insertError.message,
+                        hint: insertError.hint
+                    } : undefined
                 },
                 { status: 500, headers: corsHeaders }
             );
@@ -151,7 +163,7 @@ export async function POST(req: NextRequest) {
         const response = NextResponse.json({
             success: true,
             id: consultationRequest?.id,
-            message: 'Consultation request submitted successfully',
+            message: 'Consultation request submitted successfully! Our health coach will contact you within 24 hours.',
             data: {
                 id: consultationRequest?.id,
                 email: consultationRequest?.email,
@@ -173,14 +185,23 @@ export async function POST(req: NextRequest) {
         if (error instanceof SyntaxError) {
             errorMessage = 'Invalid request format - please check your data';
         } else if (error instanceof Error) {
-            errorMessage = `Server error: ${error.message}`;
+            if (error.message.includes('SUPABASE_URL')) {
+                errorMessage = 'Database configuration error';
+            } else if (error.message.includes('SUPABASE_ANON_KEY')) {
+                errorMessage = 'Database authentication error';
+            } else {
+                errorMessage = `Server error: ${error.message}`;
+            }
         }
 
         return NextResponse.json(
             {
                 success: false,
                 error: errorMessage,
-                details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
+                debug: process.env.NODE_ENV === 'development' ? {
+                    message: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined
+                } : undefined
             },
             {
                 status: 500,
