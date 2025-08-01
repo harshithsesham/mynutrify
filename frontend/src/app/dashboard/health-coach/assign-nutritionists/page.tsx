@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { User, Users, Calendar, Clock, CheckCircle, AlertCircle, Search } from 'lucide-react';
+import { User, Users, Clock, CheckCircle, AlertCircle, Search } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 type ConsultationRequest = {
@@ -206,7 +206,6 @@ export default function AssignProfessionalsPage() {
         // Then try trainers for fitness-related goals
         const trainer = professionals.find(professional => {
             if (professional.role !== 'trainer') return false;
-            const specs = professional.specializations.map(s => s.toLowerCase()).join(' ');
             return (
                 goals.includes('muscle') || goals.includes('fitness') || goals.includes('exercise') ||
                 goals.includes('strength') || goals.includes('athletic') || goals.includes('sport') ||
@@ -281,8 +280,8 @@ export default function AssignProfessionalsPage() {
                         <div className="text-red-600">
                             <p>No professionals found. This could be because:</p>
                             <ul className="list-disc list-inside mt-1">
-                                <li>No users have role = 'nutritionist', 'trainer', or 'health_coach' in the profiles table</li>
-                                <li>Professionals haven't completed their profile setup</li>
+                                <li>No users have role = &apos;nutritionist&apos;, &apos;trainer&apos;, or &apos;health_coach&apos; in the profiles table</li>
+                                <li>Professionals haven&apos;t completed their profile setup</li>
                             </ul>
                         </div>
                     )}
@@ -416,7 +415,7 @@ export default function AssignProfessionalsPage() {
                                     <div className="text-center py-8 text-gray-500">
                                         <AlertCircle size={48} className="mx-auto mb-4" />
                                         <p>No professionals available at the moment.</p>
-                                        <p className="text-sm mt-2">Please ensure users with role 'nutritionist', 'trainer', or 'health_coach' exist in the profiles table.</p>
+                                        <p>Please ensure users with role &apos;nutritionist&apos;, &apos;trainer&apos;, or &apos;health_coach&apos; exist in the profiles table.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3 max-h-60 overflow-y-auto">
