@@ -1,37 +1,11 @@
 // app/dashboard/health-coach/assign-nutritionists/page.tsx
+// Fixed to work with actual database schema (no nutritionists table)
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { User, Users, Calendar, Clock, CheckCircle, AlertCircle, Search } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-
-type Client = {
-    id: string;
-    full_name: string;
-    email: string;
-    age?: number;
-    gender?: string;
-    health_goals?: string;
-    current_challenges?: string;
-    consultation_completed_at?: string;
-    assigned_nutritionist?: {
-        id: string;
-        full_name: string;
-    };
-};
-
-type Nutritionist = {
-    id: string;
-    profile_id: string;
-    full_name: string;
-    email: string;
-    specializations: string[];
-    hourly_rate: number;
-    bio?: string;
-    timezone: string;
-    active_clients_count: number;
-};
 
 type ConsultationRequest = {
     id: string;
@@ -46,13 +20,26 @@ type ConsultationRequest = {
     completed_at?: string;
 };
 
-export default function AssignNutritionistsPage() {
+type Professional = {
+    id: string;
+    profile_id: string;
+    full_name: string;
+    email: string;
+    role: 'nutritionist' | 'trainer' | 'health_coach';
+    specializations: string[];
+    hourly_rate: number;
+    bio?: string;
+    timezone: string;
+    active_clients_count: number;
+};
+
+export default function AssignProfessionalsPage() {
     const supabase = createClientComponentClient();
     const [loading, setLoading] = useState(true);
     const [consultationRequests, setConsultationRequests] = useState<ConsultationRequest[]>([]);
-    const [nutritionists, setNutritionists] = useState<Nutritionist[]>([]);
+    const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [selectedClient, setSelectedClient] = useState<ConsultationRequest | null>(null);
-    const [selectedNutritionist, setSelectedNutritionist] = useState<string>('');
+    const [selectedProfessional, setSelectedProfessional] = useState<string>('');
     const [assignmentReason, setAssignmentReason] = useState('');
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [isAssigning, setIsAssigning] = useState(false);
@@ -75,99 +62,73 @@ export default function AssignNutritionistsPage() {
             // Get consultation requests that are completed but don't have assigned nutritionists
             const { data: requests, error: requestsError } = await supabase
                 .from('consultation_requests')
-                .select(`
-                    id,
-                    client_id,
-                    full_name,
-                    email,
-                    health_goals,
-                    current_challenges,
-                    status,
-                    created_at,
-                    scheduled_date,
-                    completed_at
-                `)
+                .select('*')
                 .eq('status', 'completed')
                 .is('assigned_nutritionist_id', null)
                 .order('completed_at', { ascending: false });
 
-            if (requestsError) {
-                console.error('Error fetching consultation requests:', requestsError);
-            }
+            console.log('Consultation requests:', requests);
+            console.log('Requests error:', requestsError);
 
             if (requests) {
-                // Transform the data to match our ConsultationRequest type
-                const transformedRequests = requests.map(request => ({
-                    ...request,
-                    client_name: request.full_name,
-                    client_email: request.email
+                // Transform to match expected interface
+                const transformedRequests: ConsultationRequest[] = requests.map(request => ({
+                    id: request.id,
+                    client_id: request.client_id || request.id, // Use id if client_id is missing
+                    client_name: request.full_name || 'Unknown Client',
+                    client_email: request.email || '',
+                    health_goals: request.health_goals || '',
+                    current_challenges: request.current_challenges || '',
+                    status: request.status,
+                    created_at: request.created_at,
+                    scheduled_date: request.scheduled_date,
+                    completed_at: request.completed_at
                 }));
                 setConsultationRequests(transformedRequests);
             }
 
-            // FIXED: Get nutritionists with proper profile joining
-            const { data: nutritionistData, error: nutritionistError } = await supabase
+            // FIXED: Get all professionals from profiles table (nutritionist, trainer, health_coach)
+            console.log('Fetching professionals from profiles table...');
+
+            const { data: professionalProfiles, error: profilesError } = await supabase
                 .from('profiles')
-                .select(`
-                    id,
-                    full_name,
-                    email,
-                    bio,
-                    specialties,
-                    hourly_rate,
-                    timezone,
-                    nutritionists!inner(
-                        id,
-                        specializations
-                    )
-                `)
-                .eq('role', 'nutritionist');
+                .select('id, full_name, email, bio, specialties, hourly_rate, timezone, role')
+                .in('role', ['nutritionist', 'trainer', 'health_coach']);
 
-            console.log('Raw nutritionist data:', nutritionistData);
-            console.log('Nutritionist query error:', nutritionistError);
+            console.log('Professional profiles:', professionalProfiles);
+            console.log('Profiles error:', profilesError);
 
-            if (nutritionistError) {
-                console.error('Error fetching nutritionists:', nutritionistError);
-            }
-
-            if (nutritionistData && nutritionistData.length > 0) {
-                // Get active client counts for each nutritionist and transform data
-                const nutritionistsWithStats = await Promise.all(
-                    nutritionistData.map(async (nutritionist) => {
-                        // Handle the nutritionists array from the join
-                        const nutritionistRecord = Array.isArray(nutritionist.nutritionists)
-                            ? nutritionist.nutritionists[0]
-                            : nutritionist.nutritionists;
-
-                        if (!nutritionistRecord) {
-                            console.warn('No nutritionist record found for profile:', nutritionist.id);
-                            return null;
-                        }
-
-                        // Get active client count
+            if (professionalProfiles && professionalProfiles.length > 0) {
+                // Transform profiles to professional format
+                const professionalsWithCounts = await Promise.all(
+                    professionalProfiles.map(async (profile) => {
+                        // Get active client count from nutritionist_assignments (this table might be used for all assignments)
                         const { count } = await supabase
                             .from('nutritionist_assignments')
                             .select('*', { count: 'exact', head: true })
-                            .eq('nutritionist_id', nutritionist.id)
+                            .eq('nutritionist_id', profile.id)
                             .eq('status', 'active');
 
                         return {
-                            id: nutritionistRecord.id,
-                            profile_id: nutritionist.id,
-                            full_name: nutritionist.full_name,
-                            email: nutritionist.email,
-                            specializations: nutritionistRecord.specializations || nutritionist.specialties || [],
-                            hourly_rate: nutritionist.hourly_rate || 0,
-                            bio: nutritionist.bio,
-                            timezone: nutritionist.timezone || 'UTC',
+                            id: profile.id, // Use profile id as professional id
+                            profile_id: profile.id,
+                            full_name: profile.full_name || `Unknown ${profile.role}`,
+                            email: profile.email || '',
+                            role: profile.role as 'nutritionist' | 'trainer' | 'health_coach',
+                            specializations: Array.isArray(profile.specialties) ? profile.specialties : [],
+                            hourly_rate: profile.hourly_rate || 0,
+                            bio: profile.bio,
+                            timezone: profile.timezone || 'UTC',
                             active_clients_count: count || 0
                         };
                     })
                 );
 
-                const validNutritionists = nutritionistsWithStats.filter(n => n !== null) as Nutritionist[];
-                console.log('Processed nutritionists:', validNutritionists);
-                setNutritionists(validNutritionists);
+                console.log('Processed professionals:', professionalsWithCounts);
+                setProfessionals(professionalsWithCounts);
+            } else {
+                console.log('No professional profiles found');
+                setProfessionals([]);
             }
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -181,7 +142,8 @@ export default function AssignNutritionistsPage() {
     }, [fetchData]);
 
     const handleAssignNutritionist = async () => {
-        if (!selectedClient || !selectedNutritionist) return;
+        // FIXED: Changed selectedNutritionist to selectedProfessional
+        if (!selectedClient || !selectedProfessional) return;
 
         setIsAssigning(true);
 
@@ -191,25 +153,27 @@ export default function AssignNutritionistsPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     clientId: selectedClient.client_id,
-                    nutritionistId: selectedNutritionist,
+                    nutritionistId: selectedProfessional, // This API endpoint can handle any professional
                     assignmentReason,
                     consultationId: selectedClient.id
                 })
             });
 
+            const result = await response.json();
+
             if (response.ok) {
-                alert('Nutritionist assigned successfully!');
+                alert('Professional assigned successfully!');
                 setShowAssignModal(false);
                 setSelectedClient(null);
-                setSelectedNutritionist('');
+                setSelectedProfessional('');
                 setAssignmentReason('');
                 fetchData(); // Refresh the data
             } else {
-                throw new Error('Failed to assign nutritionist');
+                throw new Error(result.error || 'Failed to assign nutritionist');
             }
         } catch (error) {
-            console.error('Error assigning nutritionist:', error);
-            alert('Error assigning nutritionist. Please try again.');
+            console.error('Error assigning professional:', error);
+            alert(`Error assigning professional: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
             setIsAssigning(false);
         }
@@ -221,17 +185,37 @@ export default function AssignNutritionistsPage() {
         request.health_goals.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const getRecommendedNutritionist = (clientGoals: string, clientChallenges: string) => {
+    const getRecommendedProfessional = (clientGoals: string, clientChallenges: string) => {
+        if (professionals.length === 0) return null;
+
         const goals = clientGoals.toLowerCase();
         const challenges = clientChallenges.toLowerCase();
 
-        return nutritionists.find(nutritionist => {
-            const specs = nutritionist.specializations.map(s => s.toLowerCase()).join(' ');
-            return specs.includes('weight') && (goals.includes('weight') || challenges.includes('weight')) ||
-                specs.includes('diabetes') && (goals.includes('diabetes') || challenges.includes('diabetes')) ||
-                specs.includes('pcos') && (goals.includes('pcos') || challenges.includes('pcos')) ||
-                specs.includes('thyroid') && (goals.includes('thyroid') || challenges.includes('thyroid'));
-        }) || nutritionists[0]; // Fallback to first nutritionist
+        // First try to find a nutritionist for nutrition-related goals
+        const nutritionist = professionals.find(professional => {
+            if (professional.role !== 'nutritionist') return false;
+            const specs = professional.specializations.map(s => s.toLowerCase()).join(' ');
+            return (
+                (specs.includes('weight') && (goals.includes('weight') || challenges.includes('weight'))) ||
+                (specs.includes('diabetes') && (goals.includes('diabetes') || challenges.includes('diabetes'))) ||
+                (specs.includes('pcos') && (goals.includes('pcos') || challenges.includes('pcos'))) ||
+                (specs.includes('thyroid') && (goals.includes('thyroid') || challenges.includes('thyroid')))
+            );
+        });
+
+        // Then try trainers for fitness-related goals
+        const trainer = professionals.find(professional => {
+            if (professional.role !== 'trainer') return false;
+            const specs = professional.specializations.map(s => s.toLowerCase()).join(' ');
+            return (
+                goals.includes('muscle') || goals.includes('fitness') || goals.includes('exercise') ||
+                goals.includes('strength') || goals.includes('athletic') || goals.includes('sport') ||
+                challenges.includes('weak') || challenges.includes('stamina')
+            );
+        });
+
+        // Return the best match or fallback to first nutritionist, then any professional
+        return nutritionist || trainer || professionals.find(p => p.role === 'nutritionist') || professionals[0];
     };
 
     if (loading) {
@@ -245,9 +229,9 @@ export default function AssignNutritionistsPage() {
     return (
         <div className="max-w-7xl mx-auto px-4 py-8">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-2">Assign Nutritionists</h1>
+                <h1 className="text-3xl font-bold mb-2">Assign Professionals</h1>
                 <p className="text-gray-600">
-                    Assign nutritionists to clients who have completed their consultations
+                    Assign nutritionists, trainers, or health coaches to clients who have completed their consultations
                 </p>
             </div>
 
@@ -271,20 +255,44 @@ export default function AssignNutritionistsPage() {
                     </div>
                     <div className="bg-green-50 px-3 py-2 rounded-lg">
                         <span className="font-medium text-green-900">
-                            {nutritionists.length} nutritionists available
+                            {professionals.length} professionals available
                         </span>
                     </div>
                 </div>
             </div>
 
             {/* Debug Information */}
-            {process.env.NODE_ENV === 'development' && (
-                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p className="text-sm text-yellow-800">
-                        Debug: Found {nutritionists.length} nutritionists and {consultationRequests.length} completed consultations
-                    </p>
+            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                    Debug: Found {professionals.length} professionals and {consultationRequests.length} completed consultations
+                </p>
+                <div className="mt-2 text-sm">
+                    {professionals.length > 0 && (
+                        <div className="text-blue-600">
+                            <p>Professionals by role:</p>
+                            <ul className="list-disc list-inside ml-4">
+                                <li>Nutritionists: {professionals.filter(p => p.role === 'nutritionist').length}</li>
+                                <li>Trainers: {professionals.filter(p => p.role === 'trainer').length}</li>
+                                <li>Health Coaches: {professionals.filter(p => p.role === 'health_coach').length}</li>
+                            </ul>
+                        </div>
+                    )}
+                    {professionals.length === 0 && (
+                        <div className="text-red-600">
+                            <p>No professionals found. This could be because:</p>
+                            <ul className="list-disc list-inside mt-1">
+                                <li>No users have role = 'nutritionist', 'trainer', or 'health_coach' in the profiles table</li>
+                                <li>Professionals haven't completed their profile setup</li>
+                            </ul>
+                        </div>
+                    )}
+                    {consultationRequests.length === 0 && (
+                        <p className="text-blue-600 mt-2">
+                            No completed consultations waiting for assignment. Check consultation_requests table.
+                        </p>
+                    )}
                 </div>
-            )}
+            </div>
 
             {filteredRequests.length === 0 ? (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
@@ -297,7 +305,7 @@ export default function AssignNutritionistsPage() {
             ) : (
                 <div className="grid gap-6">
                     {filteredRequests.map(request => {
-                        const recommendedNutritionist = getRecommendedNutritionist(
+                        const recommendedProfessional = getRecommendedProfessional(
                             request.health_goals,
                             request.current_challenges
                         );
@@ -342,20 +350,23 @@ export default function AssignNutritionistsPage() {
                                             </div>
                                         </div>
 
-                                        {recommendedNutritionist && (
+                                        {recommendedProfessional && (
                                             <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <Users size={16} className="text-green-600" />
                                                     <span className="font-medium text-green-900">
-                                                        Recommended: {recommendedNutritionist.full_name}
+                                                        Recommended: {recommendedProfessional.full_name}
+                                                    </span>
+                                                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full capitalize">
+                                                        {recommendedProfessional.role.replace('_', ' ')}
                                                     </span>
                                                 </div>
                                                 <p className="text-sm text-green-800">
-                                                    Specializes in: {recommendedNutritionist.specializations.join(', ') || 'General nutrition'}
+                                                    Specializes in: {recommendedProfessional.specializations.join(', ') || 'General consultation'}
                                                 </p>
                                                 <p className="text-xs text-green-700 mt-1">
-                                                    Active clients: {recommendedNutritionist.active_clients_count} •
-                                                    Rate: ₹{recommendedNutritionist.hourly_rate}/hour
+                                                    Active clients: {recommendedProfessional.active_clients_count} •
+                                                    Rate: ₹{recommendedProfessional.hourly_rate}/hour
                                                 </p>
                                             </div>
                                         )}
@@ -363,13 +374,14 @@ export default function AssignNutritionistsPage() {
                                         <button
                                             onClick={() => {
                                                 setSelectedClient(request);
-                                                setSelectedNutritionist(recommendedNutritionist?.profile_id || '');
+                                                setSelectedProfessional(recommendedProfessional?.profile_id || '');
                                                 setShowAssignModal(true);
                                             }}
-                                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                                            disabled={professionals.length === 0}
+                                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
                                         >
                                             <Users size={16} />
-                                            Assign Nutritionist
+                                            {professionals.length === 0 ? 'No Professionals Available' : 'Assign Professional'}
                                         </button>
                                     </div>
                                 </div>
@@ -384,7 +396,7 @@ export default function AssignNutritionistsPage() {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <h2 className="text-2xl font-bold mb-6">
-                            Assign Nutritionist to {selectedClient.client_name}
+                            Assign Professional to {selectedClient.client_name}
                         </h2>
 
                         <div className="space-y-6">
@@ -397,42 +409,51 @@ export default function AssignNutritionistsPage() {
                                 </div>
                             </div>
 
-                            {/* Nutritionist Selection */}
+                            {/* Professional Selection */}
                             <div>
-                                <label className="block font-medium mb-3">Select Nutritionist</label>
-                                {nutritionists.length === 0 ? (
+                                <label className="block font-medium mb-3">Select Professional</label>
+                                {professionals.length === 0 ? (
                                     <div className="text-center py-8 text-gray-500">
                                         <AlertCircle size={48} className="mx-auto mb-4" />
-                                        <p>No nutritionists available at the moment.</p>
-                                        <p className="text-sm mt-2">Please check that nutritionists have completed their profiles.</p>
+                                        <p>No professionals available at the moment.</p>
+                                        <p className="text-sm mt-2">Please ensure users with role 'nutritionist', 'trainer', or 'health_coach' exist in the profiles table.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3 max-h-60 overflow-y-auto">
-                                        {nutritionists.map(nutritionist => (
-                                            <label key={nutritionist.profile_id} className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        {professionals.map(professional => (
+                                            <label key={professional.profile_id} className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
                                                 <input
                                                     type="radio"
-                                                    name="nutritionist"
-                                                    value={nutritionist.profile_id}
-                                                    checked={selectedNutritionist === nutritionist.profile_id}
-                                                    onChange={(e) => setSelectedNutritionist(e.target.value)}
+                                                    name="professional"
+                                                    value={professional.profile_id}
+                                                    checked={selectedProfessional === professional.profile_id}
+                                                    onChange={(e) => setSelectedProfessional(e.target.value)}
                                                     className="mt-1"
                                                 />
                                                 <div className="flex-1">
                                                     <div className="flex items-center justify-between mb-1">
-                                                        <h4 className="font-medium">{nutritionist.full_name}</h4>
+                                                        <div className="flex items-center gap-2">
+                                                            <h4 className="font-medium">{professional.full_name}</h4>
+                                                            <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${
+                                                                professional.role === 'nutritionist' ? 'bg-green-100 text-green-700' :
+                                                                    professional.role === 'trainer' ? 'bg-blue-100 text-blue-700' :
+                                                                        'bg-purple-100 text-purple-700'
+                                                            }`}>
+                                                                {professional.role.replace('_', ' ')}
+                                                            </span>
+                                                        </div>
                                                         <span className="text-sm text-gray-500">
-                                                            ₹{nutritionist.hourly_rate}/hour
+                                                            ₹{professional.hourly_rate}/hour
                                                         </span>
                                                     </div>
                                                     <p className="text-sm text-gray-600 mb-1">
-                                                        {nutritionist.specializations.length > 0
-                                                            ? nutritionist.specializations.join(', ')
-                                                            : 'General nutrition'
+                                                        {professional.specializations.length > 0
+                                                            ? professional.specializations.join(', ')
+                                                            : 'General consultation'
                                                         }
                                                     </p>
                                                     <p className="text-xs text-gray-500">
-                                                        {nutritionist.active_clients_count} active clients • {nutritionist.timezone}
+                                                        {professional.active_clients_count} active clients • {professional.timezone}
                                                     </p>
                                                 </div>
                                             </label>
@@ -448,7 +469,7 @@ export default function AssignNutritionistsPage() {
                                     value={assignmentReason}
                                     onChange={(e) => setAssignmentReason(e.target.value)}
                                     rows={3}
-                                    placeholder="Why is this nutritionist a good fit for this client?"
+                                    placeholder="Why is this professional a good fit for this client?"
                                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
@@ -457,16 +478,16 @@ export default function AssignNutritionistsPage() {
                         <div className="flex gap-4 mt-8">
                             <button
                                 onClick={handleAssignNutritionist}
-                                disabled={!selectedNutritionist || isAssigning || nutritionists.length === 0}
+                                disabled={!selectedProfessional || isAssigning || professionals.length === 0}
                                 className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
                             >
-                                {isAssigning ? 'Assigning...' : 'Assign Nutritionist'}
+                                {isAssigning ? 'Assigning...' : 'Assign Professional'}
                             </button>
                             <button
                                 onClick={() => {
                                     setShowAssignModal(false);
                                     setSelectedClient(null);
-                                    setSelectedNutritionist('');
+                                    setSelectedProfessional('');
                                     setAssignmentReason('');
                                 }}
                                 className="flex-1 bg-gray-200 text-gray-800 font-bold py-3 rounded-lg hover:bg-gray-300 transition-colors"
