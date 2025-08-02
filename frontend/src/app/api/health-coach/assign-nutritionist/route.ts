@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
         console.log('Assignment data:', { clientId, nutritionistId, assignmentReason, consultationId });
 
-        // First, let's get the consultation request to get the client's email
+        // Get the consultation request to get the client's email
         const { data: consultationRequest } = await supabase
             .from('consultation_requests')
             .select('email, full_name')
@@ -51,37 +51,29 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Consultation request not found' }, { status: 404 });
         }
 
-        // Try to find or create a profile for the client using their email
+        // Find the client profile by email
         let clientProfileId = clientId;
 
         // Check if clientId is actually a consultation request ID (UUID format)
         if (clientId.includes('-')) {
-            console.log('Client ID appears to be a consultation ID, looking up profile by email');
+            console.log('Client ID appears to be a consultation ID, looking up profile by email:', consultationRequest.email);
 
-            // First, check if a user exists with this email
-            const { data: { users } } = await supabase.auth.admin.listUsers();
-            const existingUser = users?.find(u => u.email === consultationRequest.email);
+            // Use RPC function to find profile by email
+            // This is the most reliable approach
+            const { data: userProfiles, error: rpcError } = await supabase
+                .rpc('find_profile_by_email', { user_email: consultationRequest.email });
 
-            if (existingUser) {
-                // User exists, get their profile
-                const { data: existingProfile } = await supabase
-                    .from('profiles')
-                    .select('id')
-                    .eq('user_id', existingUser.id)
-                    .single();
+            if (rpcError || !userProfiles || userProfiles.length === 0) {
+                console.log('No user account found for email:', consultationRequest.email);
+                console.log('RPC Error:', rpcError);
 
-                if (existingProfile) {
-                    clientProfileId = existingProfile.id;
-                    console.log('Found existing profile for client:', clientProfileId);
-                }
-            } else {
-                console.log('No user account exists for this email yet');
-                // For now, we'll skip creating the assignment
-                // In a real app, you might want to create a pending assignment
                 return NextResponse.json({
-                    error: 'Client does not have an account yet. They need to sign up first before being assigned a nutritionist.'
+                    error: `No user account found for email: ${consultationRequest.email}. The client needs to create an account first before being assigned a nutritionist.`
                 }, { status: 400 });
             }
+
+            clientProfileId = userProfiles[0].id;
+            console.log('Found existing profile for client:', clientProfileId);
         }
 
         // Check if nutritionist profile exists
