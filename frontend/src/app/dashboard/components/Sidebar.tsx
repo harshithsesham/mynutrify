@@ -1,4 +1,4 @@
-// app/dashboard/components/Sidebar.tsx
+// app/dashboard/components/Sidebar.tsx (Updated section for health coach)
 'use client';
 
 import Link from 'next/link';
@@ -17,7 +17,8 @@ import {
     UserCheck,
     ClipboardList,
     BarChart,
-    MessageSquare
+    MessageSquare,
+    UserPlus
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
