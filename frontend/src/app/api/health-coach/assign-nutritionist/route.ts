@@ -1,4 +1,5 @@
 // app/api/health-coach/assign-nutritionist/route.ts
+
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
@@ -7,163 +8,124 @@ export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies });
     const { clientId, nutritionistId, assignmentReason, consultationId } = await req.json();
 
-    try {
-        // Get current user (health coach)
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+    // 1. Ensure we’re logged in
+    const {
+        data: { user },
+        error: userError
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-        // Get health coach profile
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('user_id', user.id)
-            .single();
+    // 2. Confirm this user is a health coach
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+    if (!profile) {
+        return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
 
-        if (!profile) {
-            return NextResponse.json(
-                { error: 'Profile not found' },
-                { status: 404 }
-            );
-        }
+    const { data: hc } = await supabase
+        .from('health_coaches')
+        .select('id')
+        .eq('profile_id', profile.id)
+        .single();
+    if (!hc) {
+        return NextResponse.json({ error: 'Not a health coach' }, { status: 403 });
+    }
 
-        const { data: healthCoach } = await supabase
-            .from('health_coaches')
-            .select('id')
-            .eq('profile_id', profile.id)
-            .single();
+    // 3. Load the consultation request
+    const { data: consultationRequest, error: consError } = await supabase
+        .from('consultation_requests')
+        .select('email, full_name, client_id')
+        .eq('id', consultationId)
+        .single();
+    if (consError || !consultationRequest) {
+        return NextResponse.json({ error: 'Consultation request not found' }, { status: 404 });
+    }
 
-        if (!healthCoach) {
-            return NextResponse.json({ error: 'Not a health coach' }, { status: 403 });
-        }
-
-        console.log('Assignment data:', { clientId, nutritionistId, assignmentReason, consultationId });
-
-        // Get the consultation request to get the client's email
-        const { data: consultationRequest } = await supabase
-            .from('consultation_requests')
-            .select('email, full_name')
-            .eq('id', consultationId)
-            .single();
-
-        if (!consultationRequest) {
-            return NextResponse.json({ error: 'Consultation request not found' }, { status: 404 });
-        }
-
-        // Find the client profile by email
-        let clientProfileId = clientId;
-
-        // Check if clientId is actually a consultation request ID (UUID format)
-        if (clientId.includes('-')) {
-            console.log('Client ID appears to be a consultation ID, looking up profile by email:', consultationRequest.email);
-
-            // Use RPC function to find profile by email
-            // This is the most reliable approach
-            const { data: userProfiles, error: rpcError } = await supabase
-                .rpc('find_profile_by_email', { user_email: consultationRequest.email });
-
-            if (rpcError || !userProfiles || userProfiles.length === 0) {
-                console.log('No user account found for email:', consultationRequest.email);
-                console.log('RPC Error:', rpcError);
-
-                return NextResponse.json({
-                    error: `No user account found for email: ${consultationRequest.email}. The client needs to create an account first before being assigned a nutritionist.`
-                }, { status: 400 });
-            }
-
-            clientProfileId = userProfiles[0].id;
-            console.log('Found existing profile for client:', clientProfileId);
-        }
-
-        // Check if nutritionist profile exists
-        const { data: nutritionistProfile } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('id', nutritionistId)
-            .single();
-
-        if (!nutritionistProfile) {
-            return NextResponse.json({ error: 'Nutritionist not found' }, { status: 404 });
-        }
-
-        // Check if assignment already exists
-        const { data: existingAssignment } = await supabase
-            .from('nutritionist_assignments')
-            .select('id')
-            .eq('client_id', clientProfileId)
-            .eq('nutritionist_id', nutritionistId)
-            .single();
-
-        if (existingAssignment) {
-            console.log('Assignment already exists');
-            // Update the consultation request anyway
-            await supabase
-                .from('consultation_requests')
-                .update({
-                    assigned_nutritionist_id: nutritionistId,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', consultationId);
-
+    // 4. Determine the real client_profile_id
+    let clientProfileId = consultationRequest.client_id;
+    if (!clientProfileId) {
+        // only look up by email if we truly have no client_id
+        const { data: userProfiles, error: rpcError } = await supabase
+            .rpc('find_profile_by_email', { user_email: consultationRequest.email });
+        if (rpcError || !userProfiles?.length) {
             return NextResponse.json({
-                success: true,
-                assignment: existingAssignment,
-                message: 'Assignment already exists, consultation updated'
-            });
+                error: `No user account found for email ${consultationRequest.email}. Client must sign up first.`
+            }, { status: 400 });
         }
+        clientProfileId = userProfiles[0].id;
+    }
 
-        // Create nutritionist assignment
-        const { data: assignment, error: assignmentError } = await supabase
-            .from('nutritionist_assignments')
-            .insert({
-                client_id: clientProfileId,
-                nutritionist_id: nutritionistId,
-                assigned_by: healthCoach.id,
-                assignment_reason: assignmentReason || 'Assigned by health coach after consultation',
-                status: 'active',
-                created_at: new Date().toISOString()
-            })
-            .select()
-            .single();
+    // 5. Make sure the nutritionist exists
+    const { data: nutProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', nutritionistId)
+        .single();
+    if (!nutProfile) {
+        return NextResponse.json({ error: 'Nutritionist not found' }, { status: 404 });
+    }
 
-        if (assignmentError) {
-            console.error('Assignment error:', assignmentError);
-            throw assignmentError;
-        }
-
-        console.log('Assignment created:', assignment);
-
-        // Update consultation request
-        const { error: consultationError } = await supabase
+    // 6. Prevent duplicates
+    const { data: existing } = await supabase
+        .from('nutritionist_assignments')
+        .select('id')
+        .eq('client_id', clientProfileId)
+        .eq('nutritionist_id', nutritionistId)
+        .single();
+    if (existing) {
+        // but still update the consultation row
+        await supabase
             .from('consultation_requests')
-            .update({
-                assigned_nutritionist_id: nutritionistId,
-                updated_at: new Date().toISOString()
-            })
+            .update({ assigned_nutritionist_id: nutritionistId, updated_at: new Date().toISOString() })
             .eq('id', consultationId);
-
-        if (consultationError) {
-            console.error('Consultation update error:', consultationError);
-            // Don't fail the whole operation if this fails
-        }
-
-        // TODO: Send notification to nutritionist about new client
-        // TODO: Send welcome email to client with nutritionist info
 
         return NextResponse.json({
             success: true,
-            assignment,
-            message: 'Nutritionist assigned successfully'
+            assignment: existing,
+            message: 'Assignment already exists.'
         });
-    } catch (error) {
-        console.error('Error assigning nutritionist:', error);
-        return NextResponse.json(
-            {
-                error: 'Failed to assign nutritionist',
-                details: error instanceof Error ? error.message : 'Unknown error'
-            },
-            { status: 500 }
-        );
     }
+
+    // 7. Insert the new assignment using auth.uid() as “assigned_by”
+    const { data: assignment, error: insertError } = await supabase
+        .from('nutritionist_assignments')
+        .insert({
+            client_id:           clientProfileId,
+            nutritionist_id:     nutritionistId,
+            assigned_by:         user.id,                                            // ← use the real auth.uid()
+            assignment_reason:   assignmentReason || 'Assigned after consultation',
+            status:              'active',
+            created_at:          new Date().toISOString()
+        })
+        .select()
+        .single();
+
+    if (insertError) {
+        console.error('Insert error:', insertError);
+        return NextResponse.json({
+            error: 'Failed to assign nutritionist',
+            details: insertError.message
+        }, { status: 500 });
+    }
+
+    // 8. Update the consultation_requests row
+    const { error: consUpdError } = await supabase
+        .from('consultation_requests')
+        .update({ assigned_nutritionist_id: nutritionistId, updated_at: new Date().toISOString() })
+        .eq('id', consultationId);
+
+    if (consUpdError) {
+        console.warn('Consultation update failed:', consUpdError);
+    }
+
+    return NextResponse.json({
+        success: true,
+        assignment,
+        message: 'Nutritionist assigned successfully'
+    });
 }
