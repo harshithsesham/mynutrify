@@ -91,26 +91,27 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // 7. Insert the new assignment using auth.uid() as “assigned_by”
-    const { data: assignment, error: insertError } = await supabase
+    // 6) **The fix**: insert assigned_at instead of created_at
+    const timestamp = new Date().toISOString();
+    const { data: assignment, error: assignmentError } = await supabase
         .from('nutritionist_assignments')
         .insert({
             client_id:           clientProfileId,
             nutritionist_id:     nutritionistId,
-            assigned_by:         user.id,                                            // ← use the real auth.uid()
-            assignment_reason:   assignmentReason || 'Assigned after consultation',
+            assigned_by:         user.id,
+            assignment_reason:   assignmentReason || 'Assigned by health coach',
             status:              'active',
-            created_at:          new Date().toISOString()
+            assigned_at:         timestamp
         })
         .select()
         .single();
 
-    if (insertError) {
-        console.error('Insert error:', insertError);
-        return NextResponse.json({
-            error: 'Failed to assign nutritionist',
-            details: insertError.message
-        }, { status: 500 });
+    if (assignmentError) {
+        console.error('Assignment error details:', assignmentError);
+        return NextResponse.json(
+            { error: 'Failed to assign nutritionist', details: assignmentError.message },
+            { status: 500 }
+        );
     }
 
     // 8. Update the consultation_requests row
