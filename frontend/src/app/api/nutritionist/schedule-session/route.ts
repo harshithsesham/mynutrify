@@ -187,46 +187,86 @@ export async function POST(req: NextRequest) {
 
         console.log('✅ Appointment created successfully:', newAppointment.id);
 
-        // Try to create Google Meet link - same logic as your working flow
+        // Try to create Google Meet link - fixed version
         try {
-            // Get client's email for Google Meet creation
-            const { data: { user: clientUser }, error: clientUserError } = await supabase.auth.admin.getUserById(
-                // We need to get the client's user_id first
-                (await supabase.from('profiles').select('user_id').eq('id', clientId).single()).data?.user_id
-            );
+            console.log('📧 Attempting to create Google Meet link...');
 
-            if (!clientUserError && clientUser?.email) {
-                console.log('📧 Creating Google Meet link...');
+            // First, get the client's user_id from their profile
+            const { data: clientProfileWithUserId, error: clientProfileError } = await supabase
+                .from('profiles')
+                .select('user_id')
+                .eq('id', clientId)
+                .single();
 
-                const meetingResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/create-meeting`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        appointmentId: newAppointment.id,
-                        professionalProfileId: nutritionistProfile.id,
-                        clientEmail: clientUser.email,
-                        startTime: newAppointment.start_time,
-                        endTime: newAppointment.end_time,
-                    }),
-                });
+            if (clientProfileError) {
+                console.error('❌ Error getting client profile for meeting:', clientProfileError);
+                throw new Error('Could not get client profile');
+            }
 
-                if (meetingResponse.ok) {
-                    const { meetingLink } = await meetingResponse.json();
-                    console.log('✅ Google Meet link created:', meetingLink);
+            console.log('✅ Client profile user_id:', clientProfileWithUserId.user_id);
+
+            // Get client's auth user info to get their email
+            const { data: clientUserData, error: clientUserError } = await supabase.auth.admin.getUserById(clientProfileWithUserId.user_id);
+
+            if (clientUserError) {
+                console.error('❌ Error getting client user data:', clientUserError);
+                throw new Error('Could not get client user data');
+            }
+
+            const clientEmail = clientUserData.user?.email;
+            console.log('📧 Client email found:', clientEmail ? 'Yes' : 'No');
+
+            if (!clientEmail) {
+                throw new Error('Client email not found');
+            }
+
+            console.log('🔗 Calling create-meeting API...');
+
+            const meetingResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/create-meeting`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    appointmentId: newAppointment.id,
+                    professionalProfileId: nutritionistProfile.id,
+                    clientEmail: clientEmail,
+                    startTime: newAppointment.start_time,
+                    endTime: newAppointment.end_time,
+                }),
+            });
+
+            console.log('📡 Meeting API response status:', meetingResponse.status);
+
+            if (meetingResponse.ok) {
+                const meetingData = await meetingResponse.json();
+                console.log('✅ Meeting API response:', meetingData);
+
+                const meetingLink = meetingData.meetingLink;
+
+                if (meetingLink) {
+                    console.log('🔗 Updating appointment with meeting link...');
 
                     // Update the appointment with the meeting link
-                    await supabase
+                    const { error: updateError } = await supabase
                         .from('appointments')
                         .update({ meeting_link: meetingLink })
                         .eq('id', newAppointment.id);
 
-                    newAppointment.meeting_link = meetingLink;
+                    if (updateError) {
+                        console.error('❌ Error updating appointment with meeting link:', updateError);
+                    } else {
+                        console.log('✅ Appointment updated with meeting link successfully');
+                        newAppointment.meeting_link = meetingLink;
+                    }
                 } else {
-                    console.warn('⚠️ Failed to create Google Meet link (non-critical)');
+                    console.warn('⚠️ No meeting link returned from create-meeting API');
                 }
+            } else {
+                const errorText = await meetingResponse.text();
+                console.error('❌ Meeting API failed:', meetingResponse.status, errorText);
             }
         } catch (meetingError) {
-            console.warn('⚠️ Google Meet creation failed (non-critical):', meetingError);
+            console.error('💥 Google Meet creation failed:', meetingError);
+            // Continue without meeting link - appointment is still created
         }
 
         console.log('🎉 Session scheduled successfully');
