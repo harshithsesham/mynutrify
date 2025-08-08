@@ -187,36 +187,67 @@ export async function POST(req: NextRequest) {
 
         console.log('✅ Appointment created successfully:', newAppointment.id);
 
-        // Try to create Google Meet link - fixed version
+        // Try to create Google Meet link - using alternative method to get client email
         try {
             console.log('📧 Attempting to create Google Meet link...');
 
-            // First, get the client's user_id from their profile
-            const { data: clientProfileWithUserId, error: clientProfileError } = await supabase
+            // Alternative 1: Try to get client email from their profile if stored there
+            const { data: clientWithEmail, error: clientEmailError } = await supabase
                 .from('profiles')
-                .select('user_id')
+                .select('user_id, email')
                 .eq('id', clientId)
                 .single();
 
-            if (clientProfileError) {
-                console.error('❌ Error getting client profile for meeting:', clientProfileError);
-                throw new Error('Could not get client profile');
+            let clientEmail = clientWithEmail?.email;
+
+            // Alternative 2: If email not in profile, try using RPC to get user email
+            if (!clientEmail && clientWithEmail?.user_id) {
+                console.log('📧 Email not in profile, trying RPC method...');
+
+                try {
+                    // Create a simple RPC function to get user email (run this SQL in Supabase):
+                    // CREATE OR REPLACE FUNCTION get_user_email(user_uuid uuid)
+                    // RETURNS text AS $
+                    // BEGIN
+                    //   RETURN (SELECT email FROM auth.users WHERE id = user_uuid);
+                    // END;
+                    // $ LANGUAGE plpgsql SECURITY DEFINER;
+
+                    const { data: emailData, error: rpcError } = await supabase
+                        .rpc('get_user_email', { user_uuid: clientWithEmail.user_id });
+
+                    if (!rpcError && emailData) {
+                        clientEmail = emailData;
+                        console.log('✅ Got client email via RPC');
+                    }
+                } catch (rpcError) {
+                    console.log('⚠️ RPC method failed, trying direct approach...');
+                }
             }
 
-            console.log('✅ Client profile user_id:', clientProfileWithUserId.user_id);
+            // Alternative 3: For now, let's use a placeholder or try to get from consultation request
+            if (!clientEmail) {
+                console.log('📧 Trying to get email from consultation request...');
 
-            // Get client's auth user info to get their email
-            const { data: clientUserData, error: clientUserError } = await supabase.auth.admin.getUserById(clientProfileWithUserId.user_id);
+                // Try to find the consultation request that led to this assignment
+                const { data: consultationWithEmail } = await supabase
+                    .from('consultation_requests')
+                    .select('email')
+                    .eq('client_id', clientId)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
 
-            if (clientUserError) {
-                console.error('❌ Error getting client user data:', clientUserError);
-                throw new Error('Could not get client user data');
+                if (consultationWithEmail?.email) {
+                    clientEmail = consultationWithEmail.email;
+                    console.log('✅ Found client email from consultation request');
+                }
             }
 
-            const clientEmail = clientUserData.user?.email;
             console.log('📧 Client email found:', clientEmail ? 'Yes' : 'No');
 
             if (!clientEmail) {
+                console.warn('⚠️ Could not get client email - skipping Google Meet creation');
                 throw new Error('Client email not found');
             }
 
