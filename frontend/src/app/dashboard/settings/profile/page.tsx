@@ -3,8 +3,10 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useCallback, useEffect, useState, Suspense } from 'react';
-import { CheckCircle, Globe, User, Calendar, DollarSign, Sparkles, Clock, Save, AlertCircle, Check } from 'lucide-react';
+import { CheckCircle, Globe, User, Calendar, DollarSign, Sparkles, Clock, Save, AlertCircle, Check, Info } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 
 // Type definitions
 type Profile = {
@@ -73,20 +75,38 @@ function ProfileSettingsContent() {
     const [showSuccess, setShowSuccess] = useState(false);
     const [activeSection, setActiveSection] = useState<'profile' | 'availability' | 'integrations'>('profile');
     const [isCalendarConnected, setIsCalendarConnected] = useState(false);
+    const [currentTime, setCurrentTime] = useState(new Date());
+
+    // Update current time every minute
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+        return () => clearInterval(timer);
+    }, []);
+
+    // Get current time in selected timezone
+    const getTimeInTimezone = (timezone: string) => {
+        try {
+            const zonedTime = toZonedTime(currentTime, timezone);
+            return format(zonedTime, 'h:mm a');
+        } catch {
+            return format(currentTime, 'h:mm a');
+        }
+    };
+
+    // Format time for display (add AM/PM indicators)
+    const formatTimeOption = (time: string) => {
+        const [hour, minute] = time.split(':').map(Number);
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
+    };
 
     // Check for URL parameters from OAuth callback
     const success = searchParams.get('success');
     const error = searchParams.get('error');
     const shouldRefresh = searchParams.get('refresh');
 
-    // Check calendar connection status
-    const checkCalendarConnection = useCallback(async () => {
-        if (profile) {
-            const hasToken = !!profile.google_refresh_token;
-            setIsCalendarConnected(hasToken);
-            console.log('Calendar connected status:', hasToken);
-        }
-    }, [profile]);
+    // Check calendar connection status - removed as it's now handled inline
 
     // Fetches all necessary data
     const getProfileData = useCallback(async (userId: string) => {
@@ -451,9 +471,20 @@ function ProfileSettingsContent() {
                         <Calendar size={20} />
                         Weekly Availability
                     </h2>
-                    <p className="text-gray-600 mb-6">
-                        Set your working hours in {profile?.timezone || detectedTimezone}. Clients will see these times converted to their timezone.
-                    </p>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+                        <p className="text-gray-600">
+                            Set your working hours for: <strong>{profile?.timezone || detectedTimezone}</strong>
+                        </p>
+                        <p className="text-sm text-gray-500">
+                            Current time: <strong>{getTimeInTimezone(profile?.timezone || detectedTimezone)}</strong>
+                        </p>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                        <p className="text-sm text-blue-800">
+                            <Info size={14} className="inline mr-1" />
+                            These times are in your selected timezone. When clients book appointments, they&apos;ll see these times converted to their local timezone automatically.
+                        </p>
+                    </div>
 
                     <div className="space-y-3">
                         {daysOfWeek.map((day, dayIndex) => {
@@ -485,7 +516,11 @@ function ProfileSettingsContent() {
                                                         onChange={(e) => handleAvailabilityChange(dayIndex, 'start_time', e.target.value)}
                                                         className="bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800"
                                                     >
-                                                        {timeOptions.map(time => <option key={time} value={time}>{time}</option>)}
+                                                        {timeOptions.map(time => (
+                                                            <option key={time} value={time}>
+                                                                {formatTimeOption(time)}
+                                                            </option>
+                                                        ))}
                                                     </select>
                                                 </div>
                                                 <span className="text-gray-500">to</span>
@@ -494,7 +529,11 @@ function ProfileSettingsContent() {
                                                     onChange={(e) => handleAvailabilityChange(dayIndex, 'end_time', e.target.value)}
                                                     className="bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800"
                                                 >
-                                                    {timeOptions.map(time => <option key={time} value={time}>{time}</option>)}
+                                                    {timeOptions.map(time => (
+                                                        <option key={time} value={time}>
+                                                            {formatTimeOption(time)}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </div>
                                         )}
@@ -504,10 +543,11 @@ function ProfileSettingsContent() {
                         })}
                     </div>
 
-                    <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm text-blue-800">
+                    <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p className="text-sm text-yellow-800">
                             <AlertCircle size={16} className="inline mr-1" />
-                            Tip: Keep your availability updated to help clients book at convenient times for both of you.
+                            <strong>Important:</strong> Times set here are in your {profile?.timezone || detectedTimezone} timezone.
+                            Clients in different timezones will see these converted to their local time automatically.
                         </p>
                     </div>
                 </div>
