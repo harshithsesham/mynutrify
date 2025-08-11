@@ -141,46 +141,27 @@ export default function AssignedClientsPage() {
         const [isScheduling, setIsScheduling] = useState(false);
 
         const handleScheduleSession = async () => {
-            if (!selectedDate || !selectedTime) {
-                alert('Please select both date and time');
-                return;
-            }
-
             setIsScheduling(true);
 
             try {
-                // Create local datetime string without timezone info
-                // This is what the API expects: "2024-12-20T11:00" (no Z, no timezone offset)
-                const localDateTime = `${selectedDate}T${selectedTime}`;
-
-                // Validate the format - ensure it doesn't have timezone info
-                if (localDateTime.includes('Z') || localDateTime.includes('+') || localDateTime.includes('-')) {
-                    throw new Error('Invalid time format. Local time should not contain timezone information.');
-                }
-
-                console.log('Scheduling session for local time:', localDateTime);
-
                 const response = await fetch('/api/nutritionist/schedule-session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         clientId: client.client_id,
-                        startTime: localDateTime, // Send exactly as created - no conversion
+                        startTime: `${selectedDate}T${selectedTime}`,
                         duration: parseInt(duration),
                         sessionType,
                         sessionNotes
                     })
                 });
 
-                const result = await response.json();
-
                 if (response.ok) {
                     alert('Session scheduled successfully! Client has been notified.');
                     onClose();
                     fetchAssignedClients();
                 } else {
-                    console.error('Scheduling error:', result);
-                    alert(result.error || 'Failed to schedule session');
+                    throw new Error('Failed to schedule session');
                 }
             } catch (error) {
                 console.error('Error scheduling session:', error);
@@ -198,21 +179,6 @@ export default function AssignedClientsPage() {
                 slots.push(`${hour.toString().padStart(2, '0')}:30`);
             }
             return slots;
-        };
-
-        // Format time for display (add AM/PM)
-        const formatTimeForDisplay = (time: string) => {
-            const [hour, minute] = time.split(':').map(Number);
-            const period = hour >= 12 ? 'PM' : 'AM';
-            const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-            return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
-        };
-
-        // Get tomorrow's date as minimum (to ensure at least 1 hour advance)
-        const getMinDate = () => {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            return tomorrow.toISOString().split('T')[0];
         };
 
         return (
@@ -245,18 +211,15 @@ export default function AssignedClientsPage() {
                             <input
                                 type="date"
                                 value={selectedDate}
-                                min={getMinDate()}
+                                min={new Date().toISOString().split('T')[0]}
                                 onChange={(e) => setSelectedDate(e.target.value)}
                                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             />
-                            <p className="text-xs text-gray-500 mt-1">
-                                Must be at least 24 hours in advance
-                            </p>
                         </div>
 
                         {/* Time Selection */}
                         <div>
-                            <label className="block font-medium mb-2">Select Time (Your Local Time)</label>
+                            <label className="block font-medium mb-2">Select Time</label>
                             <select
                                 value={selectedTime}
                                 onChange={(e) => setSelectedTime(e.target.value)}
@@ -265,13 +228,10 @@ export default function AssignedClientsPage() {
                                 <option value="">Choose time...</option>
                                 {generateTimeSlots().map(slot => (
                                     <option key={slot} value={slot}>
-                                        {formatTimeForDisplay(slot)}
+                                        {slot}
                                     </option>
                                 ))}
                             </select>
-                            <p className="text-xs text-gray-500 mt-1">
-                                Times shown are in your configured timezone
-                            </p>
                         </div>
 
                         {/* Duration */}

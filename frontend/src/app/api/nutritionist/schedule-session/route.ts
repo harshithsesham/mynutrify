@@ -2,7 +2,7 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { addHours, isAfter } from 'date-fns';
+import { addHours, isAfter, parseISO } from 'date-fns';
 
 export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies });
@@ -49,7 +49,6 @@ export async function POST(req: NextRequest) {
         }
 
         console.log('✅ Nutritionist profile found:', nutritionistProfile.full_name);
-        console.log('🇮🇳 Using India Standard Time (IST) for all appointments');
         console.log('🔑 Has Google Calendar connected:', !!nutritionistProfile.google_refresh_token);
 
         // Validate client exists
@@ -69,61 +68,15 @@ export async function POST(req: NextRequest) {
         console.log('✅ Client profile found:', clientProfile.full_name);
         console.log('📧 Client email:', clientProfile.email);
 
-        // FIXED: Always treat input as India Standard Time (IST)
-        const INDIA_TIMEZONE = 'Asia/Kolkata'; // UTC+5:30
+        // Parse and validate times
+        const appointmentStartTime = parseISO(startTime);
+        const appointmentEndTime = addHours(appointmentStartTime, duration / 60);
 
-        let appointmentStartTime: Date;
-        let appointmentEndTime: Date;
-
-        try {
-            // Clean the input time string
-            let cleanStartTime = startTime.trim();
-
-            // Remove any timezone indicators if present
-            cleanStartTime = cleanStartTime.replace('Z', '').replace(/[+-]\d{2}:\d{2}$/, '');
-
-            // Ensure proper format
-            if (cleanStartTime.includes(' ')) {
-                cleanStartTime = cleanStartTime.replace(' ', 'T');
-            }
-            if (!cleanStartTime.includes(':', cleanStartTime.lastIndexOf(':') + 1)) {
-                cleanStartTime += ':00';
-            }
-
-            console.log('🕐 Cleaned start time (treating as IST):', cleanStartTime);
-
-            // Create date object treating input as India time
-            const indiaDate = new Date(cleanStartTime + '+05:30');
-
-            if (isNaN(indiaDate.getTime())) {
-                throw new Error('Invalid date format');
-            }
-
-            appointmentStartTime = indiaDate;
-            appointmentEndTime = addHours(appointmentStartTime, duration / 60);
-
-            console.log('🌍 Appointment times (UTC):');
-            console.log('  Start:', appointmentStartTime.toISOString());
-            console.log('  End:', appointmentEndTime.toISOString());
-
-            // Also log the India time for verification
-            const startIST = appointmentStartTime.toLocaleString('en-IN', {
-                timeZone: INDIA_TIMEZONE,
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-            });
-            console.log('🇮🇳 India time verification:', startIST);
-
-        } catch (timeError) {
-            console.error('❌ Time parsing error:', timeError);
-            return NextResponse.json({
-                error: `Invalid time format: ${timeError instanceof Error ? timeError.message : 'Please use format: YYYY-MM-DDTHH:MM'}`
-            }, { status: 400 });
-        }
+        console.log('📅 Appointment times:', {
+            start: appointmentStartTime.toISOString(),
+            end: appointmentEndTime.toISOString(),
+            duration: duration + ' minutes'
+        });
 
         // Validation: Check if appointment is at least 1 hour in future
         const minBookableTime = addHours(new Date(), 1);
@@ -134,60 +87,15 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // Check availability using India time
-        try {
-            const indiaTime = new Date(appointmentStartTime.toLocaleString('en-US', { timeZone: INDIA_TIMEZONE }));
-            const dayOfWeek = indiaTime.getDay();
-            const appointmentHour = indiaTime.getHours();
-
-            // Convert JavaScript day of week to database format
-            const dbDayOfWeek = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-
-            console.log('📅 Availability check:');
-            console.log('  India day of week (DB format):', dbDayOfWeek);
-            console.log('  India hour:', appointmentHour);
-
-            // Check professional availability
-            const { data: availability, error: availError } = await supabase
-                .from('availability')
-                .select('start_time, end_time')
-                .eq('professional_id', nutritionistProfile.id)
-                .eq('day_of_week', dbDayOfWeek)
-                .single();
-
-            if (availError || !availability) {
-                const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-                const dayName = dayNames[dbDayOfWeek];
-                return NextResponse.json({
-                    error: `Professional is not available on ${dayName}s`
-                }, { status: 400 });
-            }
-
-            const availStart = parseInt(availability.start_time.split(':')[0]);
-            const availEnd = parseInt(availability.end_time.split(':')[0]);
-
-            if (appointmentHour < availStart || appointmentHour >= availEnd) {
-                return NextResponse.json({
-                    error: `This time (${appointmentHour}:00 IST) is outside the professional's working hours (${availability.start_time} - ${availability.end_time} IST)`
-                }, { status: 400 });
-            }
-
-            console.log('✅ Time slot is within availability hours');
-
-        } catch (availError) {
-            console.error('❌ Availability check error:', availError);
-            return NextResponse.json({
-                error: 'Error checking professional availability'
-            }, { status: 500 });
-        }
-
-        // Check for appointment conflicts - FIXED query
-        const { data: existingAppointments, error: conflictError } = await supabase
+        // Check for double-booking
+        const { data: existingAppointment, error: conflictError } = await supabase
             .from('appointments')
-            .select('id, start_time, end_time')
+            .select('id')
             .eq('professional_id', nutritionistProfile.id)
             .eq('status', 'confirmed')
-            .or(`and(start_time.lte.${appointmentStartTime.toISOString()},end_time.gt.${appointmentStartTime.toISOString()}),and(start_time.lt.${appointmentEndTime.toISOString()},end_time.gte.${appointmentEndTime.toISOString()}),and(start_time.gte.${appointmentStartTime.toISOString()},end_time.lte.${appointmentEndTime.toISOString()})`);
+            .gte('start_time', appointmentStartTime.toISOString())
+            .lt('start_time', appointmentEndTime.toISOString())
+            .maybeSingle();
 
         if (conflictError) {
             console.error('❌ Conflict check error:', conflictError);
@@ -196,8 +104,8 @@ export async function POST(req: NextRequest) {
             }, { status: 500 });
         }
 
-        if (existingAppointments && existingAppointments.length > 0) {
-            console.error('❌ Time slot conflict with existing appointment:', existingAppointments[0]);
+        if (existingAppointment) {
+            console.error('❌ Time slot conflict');
             return NextResponse.json({
                 error: 'This time slot has been booked by someone else'
             }, { status: 409 });
@@ -224,14 +132,14 @@ export async function POST(req: NextRequest) {
 
         console.log('💰 Pricing info:', { isFirstConsult, price, appointmentCount });
 
-        // Create appointment - store in UTC
+        // Create appointment
         const { data: newAppointment, error: insertError } = await supabase
             .from('appointments')
             .insert({
                 client_id: clientId,
                 professional_id: nutritionistProfile.id,
-                start_time: appointmentStartTime.toISOString(),  // Store in UTC
-                end_time: appointmentEndTime.toISOString(),      // Store in UTC
+                start_time: appointmentStartTime.toISOString(),
+                end_time: appointmentEndTime.toISOString(),
                 price: price,
                 is_first_consult: isFirstConsult,
                 status: 'confirmed',
@@ -378,7 +286,12 @@ export async function POST(req: NextRequest) {
             if (!meetingLinkCreated) {
                 console.log('📎 Attempting to add placeholder meeting link...');
 
+                // You can either:
+                // Option 1: Add a placeholder link
                 const placeholderLink = `Meeting link will be sent separately`;
+
+                // Option 2: Generate a unique meeting room (if you have a backup service)
+                // const placeholderLink = `https://meet.jit.si/nutrishiksha-${newAppointment.id}`;
 
                 await supabase
                     .from('appointments')
