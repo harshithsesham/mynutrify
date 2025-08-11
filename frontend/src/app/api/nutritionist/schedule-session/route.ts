@@ -71,21 +71,80 @@ export async function POST(req: NextRequest) {
 
         console.log('✅ Client profile found:', clientProfile.full_name);
 
-        // Parse the appointment time
+        // Enhanced time format validation and parsing
         let localStartTime: string;
         let localEndTime: string;
 
-        if (startTime.includes('T') && !startTime.includes('Z') && !startTime.includes('+') && !startTime.includes('-')) {
-            // This is a local datetime without timezone info (e.g., "2024-12-20T11:00")
-            console.log('📅 Received local time:', startTime);
+        try {
+            // Check for different possible formats
+            if (typeof startTime !== 'string') {
+                throw new Error('startTime must be a string');
+            }
 
-            // Parse the components
-            const [datePart, timePart] = startTime.split('T');
+            // Remove any timezone indicators if present (Z, +XX:XX, -XX:XX)
+            let cleanStartTime = startTime.trim();
+
+            // If it's a full ISO string with timezone, extract local part
+            if (cleanStartTime.includes('Z')) {
+                // This is UTC time, we need to convert to local
+                const utcDate = new Date(cleanStartTime);
+                if (isNaN(utcDate.getTime())) {
+                    throw new Error('Invalid UTC datetime format');
+                }
+
+                // Convert to nutritionist's timezone
+                const localDate = new Date(utcDate.toLocaleString('en-US', { timeZone: nutritionistTimezone }));
+                const year = localDate.getFullYear();
+                const month = String(localDate.getMonth() + 1).padStart(2, '0');
+                const day = String(localDate.getDate()).padStart(2, '0');
+                const hours = String(localDate.getHours()).padStart(2, '0');
+                const minutes = String(localDate.getMinutes()).padStart(2, '0');
+
+                cleanStartTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+            } else if (cleanStartTime.includes('+') || cleanStartTime.match(/-\d{2}:\d{2}$/)) {
+                // This has timezone offset, convert to local
+                const dateWithTz = new Date(cleanStartTime);
+                if (isNaN(dateWithTz.getTime())) {
+                    throw new Error('Invalid datetime with timezone format');
+                }
+
+                const localDate = new Date(dateWithTz.toLocaleString('en-US', { timeZone: nutritionistTimezone }));
+                const year = localDate.getFullYear();
+                const month = String(localDate.getMonth() + 1).padStart(2, '0');
+                const day = String(localDate.getDate()).padStart(2, '0');
+                const hours = String(localDate.getHours()).padStart(2, '0');
+                const minutes = String(localDate.getMinutes()).padStart(2, '0');
+
+                cleanStartTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+            }
+
+            // Validate the expected local format: YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS
+            const localTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
+            if (!localTimePattern.test(cleanStartTime)) {
+                throw new Error(`Expected local time format YYYY-MM-DDTHH:MM, got: ${cleanStartTime}`);
+            }
+
+            // Ensure we have seconds
+            if (!cleanStartTime.includes(':', cleanStartTime.lastIndexOf(':') + 1)) {
+                cleanStartTime += ':00';
+            }
+
+            console.log('🕐 Parsed local start time:', cleanStartTime);
+
+            // Parse the components for validation
+            const [datePart, timePart] = cleanStartTime.split('T');
             const [hourStr, minuteStr] = timePart.split(':');
             const hour = parseInt(hourStr);
             const minute = parseInt(minuteStr);
 
-            // Create local time strings
+            // Validate hour and minute ranges
+            if (hour < 0 || hour > 23) {
+                throw new Error(`Invalid hour: ${hour}. Must be 0-23`);
+            }
+            if (minute < 0 || minute > 59) {
+                throw new Error(`Invalid minute: ${minute}. Must be 0-59`);
+            }
+
             localStartTime = `${datePart} ${hourStr.padStart(2, '0')}:${minuteStr.padStart(2, '0')}:00`;
 
             // Calculate end time
@@ -94,14 +153,19 @@ export async function POST(req: NextRequest) {
             const adjustedEndHour = endHour + Math.floor(endMinute / 60);
             const adjustedEndMinute = endMinute % 60;
 
+            // Validate end time doesn't go beyond 24 hours
+            if (adjustedEndHour >= 24) {
+                throw new Error('Session would extend beyond midnight. Please choose an earlier start time.');
+            }
+
             localEndTime = `${datePart} ${adjustedEndHour.toString().padStart(2, '0')}:${adjustedEndMinute.toString().padStart(2, '0')}:00`;
 
-            console.log('🕐 Local start time:', localStartTime);
-            console.log('🕐 Local end time:', localEndTime);
+            console.log('🕐 Calculated local end time:', localEndTime);
 
-        } else {
+        } catch (timeError) {
+            console.error('❌ Time parsing error:', timeError);
             return NextResponse.json({
-                error: 'Invalid time format. Expected local time without timezone.'
+                error: `Invalid time format: ${timeError instanceof Error ? timeError.message : 'Unknown time format error'}`
             }, { status: 400 });
         }
 

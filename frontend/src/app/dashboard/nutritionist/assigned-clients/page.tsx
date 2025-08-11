@@ -149,18 +149,23 @@ export default function AssignedClientsPage() {
             setIsScheduling(true);
 
             try {
-                // Combine date and time into a single datetime string
-                // This creates a local datetime without timezone info
+                // Create local datetime string without timezone info
+                // This is what the API expects: "2024-12-20T11:00" (no Z, no timezone offset)
                 const localDateTime = `${selectedDate}T${selectedTime}`;
 
-                console.log('Scheduling session for:', localDateTime);
+                // Validate the format - ensure it doesn't have timezone info
+                if (localDateTime.includes('Z') || localDateTime.includes('+') || localDateTime.includes('-')) {
+                    throw new Error('Invalid time format. Local time should not contain timezone information.');
+                }
+
+                console.log('Scheduling session for local time:', localDateTime);
 
                 const response = await fetch('/api/nutritionist/schedule-session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         clientId: client.client_id,
-                        startTime: localDateTime, // Send as local datetime
+                        startTime: localDateTime, // Send exactly as created - no conversion
                         duration: parseInt(duration),
                         sessionType,
                         sessionNotes
