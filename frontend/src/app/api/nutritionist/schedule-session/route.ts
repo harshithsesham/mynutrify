@@ -1,6 +1,4 @@
 // app/api/nutritionist/schedule-session/route.ts
-// FIXED VERSION - Based on the working book-appointment API
-
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
@@ -17,7 +15,7 @@ export async function POST(req: NextRequest) {
 
         const { clientId, startTime, duration, sessionType, sessionNotes } = requestBody;
 
-        // Validate input - similar to book-appointment
+        // Validate input
         if (!clientId || !startTime || !duration) {
             console.error('❌ Missing required fields');
             return NextResponse.json({
@@ -28,7 +26,7 @@ export async function POST(req: NextRequest) {
         // Get authenticated user (nutritionist)
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) {
-            console.error('❌ Authentication failed');
+            console.error('❌ Authentication failed:', authError);
             return NextResponse.json({
                 error: 'Authentication required'
             }, { status: 401 });
@@ -36,10 +34,10 @@ export async function POST(req: NextRequest) {
 
         console.log('✅ User authenticated:', user.id);
 
-        // Get nutritionist profile - similar to book-appointment's professional lookup
+        // Get nutritionist profile
         const { data: nutritionistProfile, error: profileError } = await supabase
             .from('profiles')
-            .select('id, full_name, role, hourly_rate')
+            .select('id, full_name, role, hourly_rate, google_refresh_token')
             .eq('user_id', user.id)
             .single();
 
@@ -51,11 +49,12 @@ export async function POST(req: NextRequest) {
         }
 
         console.log('✅ Nutritionist profile found:', nutritionistProfile.full_name);
+        console.log('🔑 Has Google Calendar connected:', !!nutritionistProfile.google_refresh_token);
 
-        // Validate client exists - similar to book-appointment's client profile check
+        // Validate client exists
         const { data: clientProfile, error: clientError } = await supabase
             .from('profiles')
-            .select('id, full_name')
+            .select('id, full_name, email, user_id')
             .eq('id', clientId)
             .single();
 
@@ -67,10 +66,11 @@ export async function POST(req: NextRequest) {
         }
 
         console.log('✅ Client profile found:', clientProfile.full_name);
+        console.log('📧 Client email:', clientProfile.email);
 
-        // Parse and validate times - exactly like book-appointment
+        // Parse and validate times
         const appointmentStartTime = parseISO(startTime);
-        const appointmentEndTime = addHours(appointmentStartTime, duration / 60); // Convert minutes to hours
+        const appointmentEndTime = addHours(appointmentStartTime, duration / 60);
 
         console.log('📅 Appointment times:', {
             start: appointmentStartTime.toISOString(),
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
             duration: duration + ' minutes'
         });
 
-        // Validation 1: Check if appointment is at least 1 hour in future - same as book-appointment
+        // Validation: Check if appointment is at least 1 hour in future
         const minBookableTime = addHours(new Date(), 1);
         if (!isAfter(appointmentStartTime, minBookableTime)) {
             console.error('❌ Appointment too soon');
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // Validation 2: Double-booking prevention - same logic as book-appointment
+        // Check for double-booking
         const { data: existingAppointment, error: conflictError } = await supabase
             .from('appointments')
             .select('id')
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
 
         console.log('✅ No scheduling conflicts found');
 
-        // Check if this is client's first appointment with this professional - same as book-appointment
+        // Check if this is client's first appointment
         const { count: appointmentCount, error: countError } = await supabase
             .from('appointments')
             .select('*', { count: 'exact', head: true })
@@ -132,20 +132,21 @@ export async function POST(req: NextRequest) {
 
         console.log('💰 Pricing info:', { isFirstConsult, price, appointmentCount });
 
-        // Create appointment - using EXACT same structure as book-appointment
+        // Create appointment
         const { data: newAppointment, error: insertError } = await supabase
             .from('appointments')
             .insert({
                 client_id: clientId,
                 professional_id: nutritionistProfile.id,
-                start_time: appointmentStartTime.toISOString(),  // Store in UTC
-                end_time: appointmentEndTime.toISOString(),      // Store in UTC
+                start_time: appointmentStartTime.toISOString(),
+                end_time: appointmentEndTime.toISOString(),
                 price: price,
                 is_first_consult: isFirstConsult,
                 status: 'confirmed',
-                is_request_handled: false, // Same as book-appointment
+                is_request_handled: false,
                 session_type: sessionType || 'follow-up',
                 session_notes: sessionNotes || null,
+                meeting_link: null, // Will be updated after creating Google Meet
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             })
@@ -161,23 +162,10 @@ export async function POST(req: NextRequest) {
                 hint: insertError.hint
             });
 
-            // Same error handling as book-appointment
             if (insertError.code === '23505') {
                 return NextResponse.json({
                     error: 'This time slot has just been booked by someone else'
                 }, { status: 409 });
-            }
-
-            if (insertError.message.includes('conflicts with existing booking')) {
-                return NextResponse.json({
-                    error: 'This time slot conflicts with an existing appointment'
-                }, { status: 409 });
-            }
-
-            if (insertError.message.includes('not available')) {
-                return NextResponse.json({
-                    error: 'Professional is not available at this time'
-                }, { status: 400 });
             }
 
             return NextResponse.json({
@@ -187,82 +175,64 @@ export async function POST(req: NextRequest) {
 
         console.log('✅ Appointment created successfully:', newAppointment.id);
 
-        // Try to create Google Meet link - using alternative method to get client email
+        // Try to create Google Meet link
+        let meetingLinkCreated = false;
+        let meetingLink = null;
+
         try {
-            console.log('📧 Attempting to create Google Meet link...');
+            console.log('🎥 Starting Google Meet creation process...');
 
-            // Alternative 1: Try to get client email from their profile if stored there
-            const { data: clientWithEmail, error: clientEmailError } = await supabase
-                .from('profiles')
-                .select('user_id, email')
-                .eq('id', clientId)
-                .single();
+            // Check if nutritionist has Google Calendar connected
+            if (!nutritionistProfile.google_refresh_token) {
+                console.warn('⚠️ Nutritionist has not connected Google Calendar');
+                throw new Error('Google Calendar not connected');
+            }
 
-            let clientEmail = clientWithEmail?.email;
+            // Get client email
+            let clientEmail = clientProfile.email;
 
-            // Alternative 2: If email not in profile, try using RPC to get user email
-            if (!clientEmail && clientWithEmail?.user_id) {
-                console.log('📧 Email not in profile, trying RPC method...');
+            // If email is not in profile, try to get it from auth.users
+            if (!clientEmail && clientProfile.user_id) {
+                console.log('📧 Email not in profile, trying to get from auth.users...');
 
-                try {
-                    // Create a simple RPC function to get user email (run this SQL in Supabase):
-                    // CREATE OR REPLACE FUNCTION get_user_email(user_uuid uuid)
-                    // RETURNS text AS $
-                    // BEGIN
-                    //   RETURN (SELECT email FROM auth.users WHERE id = user_uuid);
-                    // END;
-                    // $ LANGUAGE plpgsql SECURITY DEFINER;
+                const { data: emailFromRPC, error: rpcError } = await supabase
+                    .rpc('get_user_email', { user_uuid: clientProfile.user_id });
 
-                    const { data: emailData, error: rpcError } = await supabase
-                        .rpc('get_user_email', { user_uuid: clientWithEmail.user_id });
+                if (!rpcError && emailFromRPC) {
+                    clientEmail = emailFromRPC;
+                    console.log('✅ Got email from auth.users:', clientEmail);
 
-                    if (!rpcError && emailData) {
-                        clientEmail = emailData;
-                        console.log('✅ Got client email via RPC');
-                    }
-                } catch (rpcError) {
-                    console.log('⚠️ RPC method failed, trying direct approach...');
+                    // Update profile with email for future use
+                    await supabase
+                        .from('profiles')
+                        .update({ email: emailFromRPC })
+                        .eq('id', clientId);
                 }
             }
 
-            // Alternative 3: For now, let's use a placeholder or try to get from consultation request
             if (!clientEmail) {
-                console.log('📧 Trying to get email from consultation request...');
-
-                // Try to find the consultation request that led to this assignment
-                const { data: consultationWithEmail } = await supabase
-                    .from('consultation_requests')
-                    .select('email')
-                    .eq('client_id', clientId)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                if (consultationWithEmail?.email) {
-                    clientEmail = consultationWithEmail.email;
-                    console.log('✅ Found client email from consultation request');
-                }
-            }
-
-            console.log('📧 Client email found:', clientEmail ? 'Yes' : 'No');
-
-            if (!clientEmail) {
-                console.warn('⚠️ Could not get client email - skipping Google Meet creation');
+                console.error('❌ Client email not found');
                 throw new Error('Client email not found');
             }
 
-            console.log('🔗 Calling create-meeting API...');
+            console.log('📧 Using client email:', clientEmail);
 
+            // Prepare meeting creation payload
+            const meetingPayload = {
+                appointmentId: newAppointment.id,
+                professionalProfileId: nutritionistProfile.id,
+                clientEmail: clientEmail,
+                startTime: newAppointment.start_time,
+                endTime: newAppointment.end_time,
+            };
+
+            console.log('🔗 Calling create-meeting API with payload:', JSON.stringify(meetingPayload, null, 2));
+
+            // Call the create-meeting API
             const meetingResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/create-meeting`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    appointmentId: newAppointment.id,
-                    professionalProfileId: nutritionistProfile.id,
-                    clientEmail: clientEmail,
-                    startTime: newAppointment.start_time,
-                    endTime: newAppointment.end_time,
-                }),
+                body: JSON.stringify(meetingPayload),
             });
 
             console.log('📡 Meeting API response status:', meetingResponse.status);
@@ -271,22 +241,28 @@ export async function POST(req: NextRequest) {
                 const meetingData = await meetingResponse.json();
                 console.log('✅ Meeting API response:', meetingData);
 
-                const meetingLink = meetingData.meetingLink;
+                meetingLink = meetingData.meetingLink;
 
                 if (meetingLink) {
-                    console.log('🔗 Updating appointment with meeting link...');
+                    console.log('🔗 Meeting link received:', meetingLink);
 
                     // Update the appointment with the meeting link
-                    const { error: updateError } = await supabase
+                    const { data: updatedAppointment, error: updateError } = await supabase
                         .from('appointments')
-                        .update({ meeting_link: meetingLink })
-                        .eq('id', newAppointment.id);
+                        .update({
+                            meeting_link: meetingLink,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', newAppointment.id)
+                        .select()
+                        .single();
 
                     if (updateError) {
                         console.error('❌ Error updating appointment with meeting link:', updateError);
                     } else {
                         console.log('✅ Appointment updated with meeting link successfully');
                         newAppointment.meeting_link = meetingLink;
+                        meetingLinkCreated = true;
                     }
                 } else {
                     console.warn('⚠️ No meeting link returned from create-meeting API');
@@ -294,26 +270,61 @@ export async function POST(req: NextRequest) {
             } else {
                 const errorText = await meetingResponse.text();
                 console.error('❌ Meeting API failed:', meetingResponse.status, errorText);
+
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    throw new Error(errorJson.error || 'Meeting creation failed');
+                } catch (e) {
+                    throw new Error(`Meeting creation failed: ${errorText}`);
+                }
             }
         } catch (meetingError) {
             console.error('💥 Google Meet creation failed:', meetingError);
-            // Continue without meeting link - appointment is still created
+            console.error('Error details:', meetingError instanceof Error ? meetingError.message : meetingError);
+
+            // If meeting creation fails, add a fallback or placeholder
+            if (!meetingLinkCreated) {
+                console.log('📎 Attempting to add placeholder meeting link...');
+
+                // You can either:
+                // Option 1: Add a placeholder link
+                const placeholderLink = `Meeting link will be sent separately`;
+
+                // Option 2: Generate a unique meeting room (if you have a backup service)
+                // const placeholderLink = `https://meet.jit.si/nutrishiksha-${newAppointment.id}`;
+
+                await supabase
+                    .from('appointments')
+                    .update({
+                        meeting_link: placeholderLink,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', newAppointment.id);
+
+                newAppointment.meeting_link = placeholderLink;
+            }
         }
 
-        console.log('🎉 Session scheduled successfully');
+        console.log('🎉 Session scheduling completed');
 
-        // Return same format as book-appointment
+        // Return response
         return NextResponse.json({
             success: true,
             appointment: newAppointment,
             isFirstConsult,
-            message: 'Session scheduled successfully'
+            message: meetingLinkCreated
+                ? 'Session scheduled successfully with Google Meet link!'
+                : 'Session scheduled successfully! Meeting link will be sent separately.',
+            warning: !meetingLinkCreated
+                ? 'Google Meet link could not be created. Please check your Google Calendar connection or send the meeting link manually.'
+                : undefined
         });
 
     } catch (error) {
-        console.error('💥 Booking API error:', error);
+        console.error('💥 Unexpected error in schedule-session:', error);
         return NextResponse.json({
-            error: 'Internal server error'
+            error: 'Internal server error',
+            details: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 });
     }
 }
