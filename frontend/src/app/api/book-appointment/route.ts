@@ -1,9 +1,9 @@
-// app/api/book-appointment/route.ts
+// app/api/book-appointment/route.ts - COMPLETE FIXED VERSION
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { addHours, isAfter, parseISO } from 'date-fns';
-import { toZonedTime } from 'date-fns-tz';
+import { toZonedTime, format as formatTz } from 'date-fns-tz';
 
 export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies });
@@ -11,8 +11,8 @@ export async function POST(req: NextRequest) {
     try {
         const {
             professionalId,
-            startTime,    // ISO string in UTC
-            endTime,      // ISO string in UTC
+            startTime,    // ISO string in UTC (already converted by frontend)
+            endTime,      // ISO string in UTC (already converted by frontend)
         } = await req.json();
 
         // Validate input
@@ -43,9 +43,16 @@ export async function POST(req: NextRequest) {
             }, { status: 404 });
         }
 
-        // Parse appointment times - they're already in UTC
+        // Parse appointment times - they're already in UTC from frontend
         const appointmentStartTime = parseISO(startTime);
         const appointmentEndTime = parseISO(endTime);
+
+        console.log('Received appointment times (UTC):', {
+            startTime,
+            endTime,
+            parsedStart: appointmentStartTime.toISOString(),
+            parsedEnd: appointmentEndTime.toISOString()
+        });
 
         // Validation 1: Check if appointment is at least 1 hour in future
         const minBookableTime = addHours(new Date(), 1);
@@ -55,10 +62,10 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // Get professional's timezone
+        // Get professional's timezone and availability
         const { data: professionalProfile, error: profTimezoneError } = await supabase
             .from('profiles')
-            .select('timezone, hourly_rate')
+            .select('timezone, hourly_rate, full_name')
             .eq('id', professionalId)
             .single();
 
@@ -68,10 +75,18 @@ export async function POST(req: NextRequest) {
             }, { status: 404 });
         }
 
-        const professionalTimezone = professionalProfile.timezone || 'UTC';
+        const professionalTimezone = professionalProfile.timezone || 'Asia/Kolkata';
 
-        // Convert appointment time to professional's timezone for availability check
+        // Convert UTC appointment time to professional's timezone for availability check
         const appointmentInProfTimezone = toZonedTime(appointmentStartTime, professionalTimezone);
+
+        console.log('Timezone conversion for availability check:', {
+            utcTime: appointmentStartTime.toISOString(),
+            professionalTimezone,
+            localTime: formatTz(appointmentInProfTimezone, 'yyyy-MM-dd HH:mm:ss zzz', {
+                timeZone: professionalTimezone
+            })
+        });
 
         // Get day of week in professional's timezone
         // JavaScript: 0=Sunday, 1=Monday, ..., 6=Saturday
@@ -82,12 +97,10 @@ export async function POST(req: NextRequest) {
         // Get hour in professional's timezone
         const appointmentHourInProfTimezone = appointmentInProfTimezone.getHours();
 
-        console.log('Timezone conversion:', {
-            utcTime: startTime,
-            professionalTimezone,
-            localTime: appointmentInProfTimezone,
+        console.log('Availability check details:', {
             dayOfWeek: dbDayOfWeek,
-            hour: appointmentHourInProfTimezone
+            hour: appointmentHourInProfTimezone,
+            professionalName: professionalProfile.full_name
         });
 
         // Check professional availability
@@ -100,17 +113,29 @@ export async function POST(req: NextRequest) {
 
         if (availError || !availability) {
             const dayName = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][dbDayOfWeek];
+            console.log(`Professional not available on ${dayName}s`);
             return NextResponse.json({
-                error: `Professional is not available on ${dayName}s`
+                error: `${professionalProfile.full_name} is not available on ${dayName}s`
             }, { status: 400 });
         }
 
         const availStart = parseInt(availability.start_time.split(':')[0]);
         const availEnd = parseInt(availability.end_time.split(':')[0]);
 
+        console.log('Professional availability:', {
+            availableStart: availStart,
+            availableEnd: availEnd,
+            requestedHour: appointmentHourInProfTimezone,
+            isWithinHours: appointmentHourInProfTimezone >= availStart && appointmentHourInProfTimezone < availEnd
+        });
+
         if (appointmentHourInProfTimezone < availStart || appointmentHourInProfTimezone >= availEnd) {
+            const professionalTimeString = formatTz(appointmentInProfTimezone, 'h:mm a zzz', {
+                timeZone: professionalTimezone
+            });
+
             return NextResponse.json({
-                error: `This time (${appointmentHourInProfTimezone}:00 ${professionalTimezone}) is outside the professional's working hours (${availability.start_time} - ${availability.end_time} ${professionalTimezone})`
+                error: `This time (${professionalTimeString}) is outside ${professionalProfile.full_name}'s working hours (${availability.start_time} - ${availability.end_time} ${professionalTimezone})`
             }, { status: 400 });
         }
 
@@ -160,8 +185,8 @@ export async function POST(req: NextRequest) {
             .insert({
                 client_id: clientProfile.id,
                 professional_id: professionalId,
-                start_time: startTime,  // Store in UTC
-                end_time: endTime,      // Store in UTC
+                start_time: startTime,  // Store in UTC (already converted)
+                end_time: endTime,      // Store in UTC (already converted)
                 price: price,
                 is_first_consult: isFirstConsult,
                 status: 'confirmed',
@@ -197,6 +222,14 @@ export async function POST(req: NextRequest) {
                 error: 'Failed to create appointment: ' + insertError.message
             }, { status: 500 });
         }
+
+        console.log('Appointment created successfully:', {
+            id: newAppointment.id,
+            startTime: newAppointment.start_time,
+            endTime: newAppointment.end_time,
+            isFirstConsult,
+            price
+        });
 
         return NextResponse.json({
             success: true,
