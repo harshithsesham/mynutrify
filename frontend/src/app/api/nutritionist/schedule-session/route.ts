@@ -3,6 +3,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { addHours, isAfter, parseISO } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 
 export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies });
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
         // Get nutritionist profile
         const { data: nutritionistProfile, error: profileError } = await supabase
             .from('profiles')
-            .select('id, full_name, role, hourly_rate, google_refresh_token')
+            .select('id, full_name, role, hourly_rate, google_refresh_token, timezone')
             .eq('user_id', user.id)
             .single();
 
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
         }
 
         console.log('✅ Nutritionist profile found:', nutritionistProfile.full_name);
+        console.log('🌍 Nutritionist timezone:', nutritionistProfile.timezone || 'UTC');
         console.log('🔑 Has Google Calendar connected:', !!nutritionistProfile.google_refresh_token);
 
         // Validate client exists
@@ -68,11 +70,50 @@ export async function POST(req: NextRequest) {
         console.log('✅ Client profile found:', clientProfile.full_name);
         console.log('📧 Client email:', clientProfile.email);
 
-        // Parse and validate times
-        const appointmentStartTime = parseISO(startTime);
-        const appointmentEndTime = addHours(appointmentStartTime, duration / 60);
+        // IMPORTANT: The startTime coming from the client is already in ISO format with UTC
+        // It should be something like "2024-12-20T11:00" (local time without timezone)
+        // We need to interpret this as the nutritionist's local time and convert to UTC
 
-        console.log('📅 Appointment times:', {
+        const nutritionistTimezone = nutritionistProfile.timezone || 'UTC';
+
+        // Parse the incoming time
+        let appointmentStartTime: Date;
+        let appointmentEndTime: Date;
+
+        if (startTime.includes('T') && !startTime.includes('Z') && !startTime.includes('+') && !startTime.includes('-')) {
+            // This is a local datetime without timezone info (e.g., "2024-12-20T11:00")
+            // We need to interpret it as the nutritionist's timezone
+            console.log('📅 Received local time:', startTime);
+
+            // Create a date object from the string
+            const localDate = parseISO(startTime);
+            console.log('🕐 Parsed as local date:', localDate.toString());
+
+            // This is already in the nutritionist's local time, so we just use it
+            appointmentStartTime = localDate;
+            appointmentEndTime = addHours(appointmentStartTime, duration / 60);
+
+            console.log('🌍 Nutritionist timezone:', nutritionistTimezone);
+            console.log('📅 Appointment local time:', appointmentStartTime.toString());
+            console.log('🌐 Appointment UTC time:', appointmentStartTime.toISOString());
+
+        } else if (startTime.includes('Z') || startTime.includes('+') || startTime.includes('-')) {
+            // This is already a full ISO string with timezone
+            appointmentStartTime = parseISO(startTime);
+            appointmentEndTime = addHours(appointmentStartTime, duration / 60);
+
+            console.log('📅 Received UTC/timezone time:', startTime);
+            console.log('🌐 Parsed as:', appointmentStartTime.toISOString());
+        } else {
+            // Fallback: treat as ISO string
+            appointmentStartTime = parseISO(startTime);
+            appointmentEndTime = addHours(appointmentStartTime, duration / 60);
+
+            console.log('📅 Fallback parsing:', startTime);
+            console.log('🌐 Parsed as:', appointmentStartTime.toISOString());
+        }
+
+        console.log('📅 Final appointment times:', {
             start: appointmentStartTime.toISOString(),
             end: appointmentEndTime.toISOString(),
             duration: duration + ' minutes'
@@ -132,14 +173,14 @@ export async function POST(req: NextRequest) {
 
         console.log('💰 Pricing info:', { isFirstConsult, price, appointmentCount });
 
-        // Create appointment
+        // Create appointment - store in UTC
         const { data: newAppointment, error: insertError } = await supabase
             .from('appointments')
             .insert({
                 client_id: clientId,
                 professional_id: nutritionistProfile.id,
-                start_time: appointmentStartTime.toISOString(),
-                end_time: appointmentEndTime.toISOString(),
+                start_time: appointmentStartTime.toISOString(),  // Store in UTC
+                end_time: appointmentEndTime.toISOString(),      // Store in UTC
                 price: price,
                 is_first_consult: isFirstConsult,
                 status: 'confirmed',
@@ -166,6 +207,20 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({
                     error: 'This time slot has just been booked by someone else'
                 }, { status: 409 });
+            }
+
+            // Parse the error message for more specific feedback
+            if (insertError.message.includes('outside professional availability')) {
+                // Extract the details from the error message
+                const match = insertError.message.match(/(\d{1,2}:\d{2}) (\S+) not between (\d{1,2}:\d{2})-(\d{1,2}:\d{2})/);
+                if (match) {
+                    return NextResponse.json({
+                        error: `This time (${match[1]} ${match[2]}) is outside your availability hours (${match[3]}-${match[4]} ${match[2]}). Please check your availability settings.`
+                    }, { status: 400 });
+                }
+                return NextResponse.json({
+                    error: 'This time is outside your configured availability hours. Please check your settings.'
+                }, { status: 400 });
             }
 
             return NextResponse.json({
@@ -286,12 +341,7 @@ export async function POST(req: NextRequest) {
             if (!meetingLinkCreated) {
                 console.log('📎 Attempting to add placeholder meeting link...');
 
-                // You can either:
-                // Option 1: Add a placeholder link
                 const placeholderLink = `Meeting link will be sent separately`;
-
-                // Option 2: Generate a unique meeting room (if you have a backup service)
-                // const placeholderLink = `https://meet.jit.si/nutrishiksha-${newAppointment.id}`;
 
                 await supabase
                     .from('appointments')

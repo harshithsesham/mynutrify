@@ -141,27 +141,41 @@ export default function AssignedClientsPage() {
         const [isScheduling, setIsScheduling] = useState(false);
 
         const handleScheduleSession = async () => {
+            if (!selectedDate || !selectedTime) {
+                alert('Please select both date and time');
+                return;
+            }
+
             setIsScheduling(true);
 
             try {
+                // Combine date and time into a single datetime string
+                // This creates a local datetime without timezone info
+                const localDateTime = `${selectedDate}T${selectedTime}`;
+
+                console.log('Scheduling session for:', localDateTime);
+
                 const response = await fetch('/api/nutritionist/schedule-session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         clientId: client.client_id,
-                        startTime: `${selectedDate}T${selectedTime}`,
+                        startTime: localDateTime, // Send as local datetime
                         duration: parseInt(duration),
                         sessionType,
                         sessionNotes
                     })
                 });
 
+                const result = await response.json();
+
                 if (response.ok) {
                     alert('Session scheduled successfully! Client has been notified.');
                     onClose();
                     fetchAssignedClients();
                 } else {
-                    throw new Error('Failed to schedule session');
+                    console.error('Scheduling error:', result);
+                    alert(result.error || 'Failed to schedule session');
                 }
             } catch (error) {
                 console.error('Error scheduling session:', error);
@@ -179,6 +193,21 @@ export default function AssignedClientsPage() {
                 slots.push(`${hour.toString().padStart(2, '0')}:30`);
             }
             return slots;
+        };
+
+        // Format time for display (add AM/PM)
+        const formatTimeForDisplay = (time: string) => {
+            const [hour, minute] = time.split(':').map(Number);
+            const period = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+            return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
+        };
+
+        // Get tomorrow's date as minimum (to ensure at least 1 hour advance)
+        const getMinDate = () => {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            return tomorrow.toISOString().split('T')[0];
         };
 
         return (
@@ -211,15 +240,18 @@ export default function AssignedClientsPage() {
                             <input
                                 type="date"
                                 value={selectedDate}
-                                min={new Date().toISOString().split('T')[0]}
+                                min={getMinDate()}
                                 onChange={(e) => setSelectedDate(e.target.value)}
                                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             />
+                            <p className="text-xs text-gray-500 mt-1">
+                                Must be at least 24 hours in advance
+                            </p>
                         </div>
 
                         {/* Time Selection */}
                         <div>
-                            <label className="block font-medium mb-2">Select Time</label>
+                            <label className="block font-medium mb-2">Select Time (Your Local Time)</label>
                             <select
                                 value={selectedTime}
                                 onChange={(e) => setSelectedTime(e.target.value)}
@@ -228,10 +260,13 @@ export default function AssignedClientsPage() {
                                 <option value="">Choose time...</option>
                                 {generateTimeSlots().map(slot => (
                                     <option key={slot} value={slot}>
-                                        {slot}
+                                        {formatTimeForDisplay(slot)}
                                     </option>
                                 ))}
                             </select>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Times shown are in your configured timezone
+                            </p>
                         </div>
 
                         {/* Duration */}
