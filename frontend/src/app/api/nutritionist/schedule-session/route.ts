@@ -2,8 +2,10 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { addHours, isAfter, parseISO } from 'date-fns';
-import { toZonedTime } from 'date-fns-tz';
+
+
+// UPDATED: app/api/nutritionist/schedule-session/route.ts
+// This version properly handles timezone conversion
 
 export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies });
@@ -49,9 +51,9 @@ export async function POST(req: NextRequest) {
             }, { status: 404 });
         }
 
+        const nutritionistTimezone = nutritionistProfile.timezone || 'UTC';
         console.log('✅ Nutritionist profile found:', nutritionistProfile.full_name);
-        console.log('🌍 Nutritionist timezone:', nutritionistProfile.timezone || 'UTC');
-        console.log('🔑 Has Google Calendar connected:', !!nutritionistProfile.google_refresh_token);
+        console.log('🌍 Nutritionist timezone:', nutritionistTimezone);
 
         // Validate client exists
         const { data: clientProfile, error: clientError } = await supabase
@@ -68,91 +70,40 @@ export async function POST(req: NextRequest) {
         }
 
         console.log('✅ Client profile found:', clientProfile.full_name);
-        console.log('📧 Client email:', clientProfile.email);
 
-        // IMPORTANT: The startTime coming from the client is already in ISO format with UTC
-        // It should be something like "2024-12-20T11:00" (local time without timezone)
-        // We need to interpret this as the nutritionist's local time and convert to UTC
-
-        const nutritionistTimezone = nutritionistProfile.timezone || 'UTC';
-
-        // Parse the incoming time
-        let appointmentStartTime: Date;
-        let appointmentEndTime: Date;
+        // Parse the appointment time
+        let localStartTime: string;
+        let localEndTime: string;
 
         if (startTime.includes('T') && !startTime.includes('Z') && !startTime.includes('+') && !startTime.includes('-')) {
             // This is a local datetime without timezone info (e.g., "2024-12-20T11:00")
-            // We need to interpret it as the nutritionist's timezone
             console.log('📅 Received local time:', startTime);
 
-            // Create a date object from the string
-            const localDate = parseISO(startTime);
-            console.log('🕐 Parsed as local date:', localDate.toString());
+            // Parse the components
+            const [datePart, timePart] = startTime.split('T');
+            const [hourStr, minuteStr] = timePart.split(':');
+            const hour = parseInt(hourStr);
+            const minute = parseInt(minuteStr);
 
-            // This is already in the nutritionist's local time, so we just use it
-            appointmentStartTime = localDate;
-            appointmentEndTime = addHours(appointmentStartTime, duration / 60);
+            // Create local time strings
+            localStartTime = `${datePart} ${hourStr.padStart(2, '0')}:${minuteStr.padStart(2, '0')}:00`;
 
-            console.log('🌍 Nutritionist timezone:', nutritionistTimezone);
-            console.log('📅 Appointment local time:', appointmentStartTime.toString());
-            console.log('🌐 Appointment UTC time:', appointmentStartTime.toISOString());
+            // Calculate end time
+            const endHour = hour + Math.floor(duration / 60);
+            const endMinute = minute + (duration % 60);
+            const adjustedEndHour = endHour + Math.floor(endMinute / 60);
+            const adjustedEndMinute = endMinute % 60;
 
-        } else if (startTime.includes('Z') || startTime.includes('+') || startTime.includes('-')) {
-            // This is already a full ISO string with timezone
-            appointmentStartTime = parseISO(startTime);
-            appointmentEndTime = addHours(appointmentStartTime, duration / 60);
+            localEndTime = `${datePart} ${adjustedEndHour.toString().padStart(2, '0')}:${adjustedEndMinute.toString().padStart(2, '0')}:00`;
 
-            console.log('📅 Received UTC/timezone time:', startTime);
-            console.log('🌐 Parsed as:', appointmentStartTime.toISOString());
+            console.log('🕐 Local start time:', localStartTime);
+            console.log('🕐 Local end time:', localEndTime);
+
         } else {
-            // Fallback: treat as ISO string
-            appointmentStartTime = parseISO(startTime);
-            appointmentEndTime = addHours(appointmentStartTime, duration / 60);
-
-            console.log('📅 Fallback parsing:', startTime);
-            console.log('🌐 Parsed as:', appointmentStartTime.toISOString());
-        }
-
-        console.log('📅 Final appointment times:', {
-            start: appointmentStartTime.toISOString(),
-            end: appointmentEndTime.toISOString(),
-            duration: duration + ' minutes'
-        });
-
-        // Validation: Check if appointment is at least 1 hour in future
-        const minBookableTime = addHours(new Date(), 1);
-        if (!isAfter(appointmentStartTime, minBookableTime)) {
-            console.error('❌ Appointment too soon');
             return NextResponse.json({
-                error: 'Appointments must be scheduled at least 1 hour in advance'
+                error: 'Invalid time format. Expected local time without timezone.'
             }, { status: 400 });
         }
-
-        // Check for double-booking
-        const { data: existingAppointment, error: conflictError } = await supabase
-            .from('appointments')
-            .select('id')
-            .eq('professional_id', nutritionistProfile.id)
-            .eq('status', 'confirmed')
-            .gte('start_time', appointmentStartTime.toISOString())
-            .lt('start_time', appointmentEndTime.toISOString())
-            .maybeSingle();
-
-        if (conflictError) {
-            console.error('❌ Conflict check error:', conflictError);
-            return NextResponse.json({
-                error: 'Error checking appointment availability'
-            }, { status: 500 });
-        }
-
-        if (existingAppointment) {
-            console.error('❌ Time slot conflict');
-            return NextResponse.json({
-                error: 'This time slot has been booked by someone else'
-            }, { status: 409 });
-        }
-
-        console.log('✅ No scheduling conflicts found');
 
         // Check if this is client's first appointment
         const { count: appointmentCount, error: countError } = await supabase
@@ -173,53 +124,33 @@ export async function POST(req: NextRequest) {
 
         console.log('💰 Pricing info:', { isFirstConsult, price, appointmentCount });
 
-        // Create appointment - store in UTC
+        // Use the PostgreSQL function to insert the appointment with proper timezone conversion
         const { data: newAppointment, error: insertError } = await supabase
-            .from('appointments')
-            .insert({
-                client_id: clientId,
-                professional_id: nutritionistProfile.id,
-                start_time: appointmentStartTime.toISOString(),  // Store in UTC
-                end_time: appointmentEndTime.toISOString(),      // Store in UTC
-                price: price,
-                is_first_consult: isFirstConsult,
-                status: 'confirmed',
-                is_request_handled: false,
-                session_type: sessionType || 'follow-up',
-                session_notes: sessionNotes || null,
-                meeting_link: null, // Will be updated after creating Google Meet
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
+            .rpc('insert_appointment_with_timezone', {
+                p_client_id: clientId,
+                p_professional_id: nutritionistProfile.id,
+                p_start_time_local: localStartTime,
+                p_end_time_local: localEndTime,
+                p_timezone: nutritionistTimezone,
+                p_price: price,
+                p_is_first_consult: isFirstConsult,
+                p_status: 'confirmed',
+                p_session_type: sessionType || 'follow-up',
+                p_session_notes: sessionNotes || null
+            });
 
         if (insertError) {
             console.error('❌ Insert error:', insertError);
-            console.error('Insert error details:', {
-                code: insertError.code,
-                message: insertError.message,
-                details: insertError.details,
-                hint: insertError.hint
-            });
 
-            if (insertError.code === '23505') {
+            if (insertError.message.includes('conflicts with existing booking')) {
                 return NextResponse.json({
-                    error: 'This time slot has just been booked by someone else'
+                    error: 'This time slot conflicts with an existing appointment'
                 }, { status: 409 });
             }
 
-            // Parse the error message for more specific feedback
-            if (insertError.message.includes('outside professional availability')) {
-                // Extract the details from the error message
-                const match = insertError.message.match(/(\d{1,2}:\d{2}) (\S+) not between (\d{1,2}:\d{2})-(\d{1,2}:\d{2})/);
-                if (match) {
-                    return NextResponse.json({
-                        error: `This time (${match[1]} ${match[2]}) is outside your availability hours (${match[3]}-${match[4]} ${match[2]}). Please check your availability settings.`
-                    }, { status: 400 });
-                }
+            if (insertError.message.includes('not available')) {
                 return NextResponse.json({
-                    error: 'This time is outside your configured availability hours. Please check your settings.'
+                    error: 'Professional is not available at this time'
                 }, { status: 400 });
             }
 
@@ -228,146 +159,59 @@ export async function POST(req: NextRequest) {
             }, { status: 500 });
         }
 
-        console.log('✅ Appointment created successfully:', newAppointment.id);
+        console.log('✅ Appointment created successfully:', newAppointment[0]?.id);
 
-        // Try to create Google Meet link
+        // Try to create Google Meet link (existing code)
         let meetingLinkCreated = false;
         let meetingLink = null;
 
         try {
-            console.log('🎥 Starting Google Meet creation process...');
+            if (nutritionistProfile.google_refresh_token && clientProfile.email) {
+                console.log('🎥 Creating Google Meet link...');
 
-            // Check if nutritionist has Google Calendar connected
-            if (!nutritionistProfile.google_refresh_token) {
-                console.warn('⚠️ Nutritionist has not connected Google Calendar');
-                throw new Error('Google Calendar not connected');
-            }
+                const meetingResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/create-meeting`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        appointmentId: newAppointment[0].id,
+                        professionalProfileId: nutritionistProfile.id,
+                        clientEmail: clientProfile.email,
+                        startTime: newAppointment[0].start_time,
+                        endTime: newAppointment[0].end_time,
+                    }),
+                });
 
-            // Get client email
-            let clientEmail = clientProfile.email;
+                if (meetingResponse.ok) {
+                    const meetingData = await meetingResponse.json();
+                    meetingLink = meetingData.meetingLink;
+                    meetingLinkCreated = true;
 
-            // If email is not in profile, try to get it from auth.users
-            if (!clientEmail && clientProfile.user_id) {
-                console.log('📧 Email not in profile, trying to get from auth.users...');
-
-                const { data: emailFromRPC, error: rpcError } = await supabase
-                    .rpc('get_user_email', { user_uuid: clientProfile.user_id });
-
-                if (!rpcError && emailFromRPC) {
-                    clientEmail = emailFromRPC;
-                    console.log('✅ Got email from auth.users:', clientEmail);
-
-                    // Update profile with email for future use
+                    // Update appointment with meeting link
                     await supabase
-                        .from('profiles')
-                        .update({ email: emailFromRPC })
-                        .eq('id', clientId);
-                }
-            }
-
-            if (!clientEmail) {
-                console.error('❌ Client email not found');
-                throw new Error('Client email not found');
-            }
-
-            console.log('📧 Using client email:', clientEmail);
-
-            // Prepare meeting creation payload
-            const meetingPayload = {
-                appointmentId: newAppointment.id,
-                professionalProfileId: nutritionistProfile.id,
-                clientEmail: clientEmail,
-                startTime: newAppointment.start_time,
-                endTime: newAppointment.end_time,
-            };
-
-            console.log('🔗 Calling create-meeting API with payload:', JSON.stringify(meetingPayload, null, 2));
-
-            // Call the create-meeting API
-            const meetingResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/create-meeting`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(meetingPayload),
-            });
-
-            console.log('📡 Meeting API response status:', meetingResponse.status);
-
-            if (meetingResponse.ok) {
-                const meetingData = await meetingResponse.json();
-                console.log('✅ Meeting API response:', meetingData);
-
-                meetingLink = meetingData.meetingLink;
-
-                if (meetingLink) {
-                    console.log('🔗 Meeting link received:', meetingLink);
-
-                    // Update the appointment with the meeting link
-                    const { data: updatedAppointment, error: updateError } = await supabase
                         .from('appointments')
                         .update({
                             meeting_link: meetingLink,
                             updated_at: new Date().toISOString()
                         })
-                        .eq('id', newAppointment.id)
-                        .select()
-                        .single();
+                        .eq('id', newAppointment[0].id);
 
-                    if (updateError) {
-                        console.error('❌ Error updating appointment with meeting link:', updateError);
-                    } else {
-                        console.log('✅ Appointment updated with meeting link successfully');
-                        newAppointment.meeting_link = meetingLink;
-                        meetingLinkCreated = true;
-                    }
-                } else {
-                    console.warn('⚠️ No meeting link returned from create-meeting API');
-                }
-            } else {
-                const errorText = await meetingResponse.text();
-                console.error('❌ Meeting API failed:', meetingResponse.status, errorText);
-
-                try {
-                    const errorJson = JSON.parse(errorText);
-                    throw new Error(errorJson.error || 'Meeting creation failed');
-                } catch (e) {
-                    throw new Error(`Meeting creation failed: ${errorText}`);
+                    console.log('✅ Meeting link created and updated');
                 }
             }
         } catch (meetingError) {
             console.error('💥 Google Meet creation failed:', meetingError);
-            console.error('Error details:', meetingError instanceof Error ? meetingError.message : meetingError);
-
-            // If meeting creation fails, add a fallback or placeholder
-            if (!meetingLinkCreated) {
-                console.log('📎 Attempting to add placeholder meeting link...');
-
-                const placeholderLink = `Meeting link will be sent separately`;
-
-                await supabase
-                    .from('appointments')
-                    .update({
-                        meeting_link: placeholderLink,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', newAppointment.id);
-
-                newAppointment.meeting_link = placeholderLink;
-            }
+            // Continue without meeting link
         }
 
         console.log('🎉 Session scheduling completed');
 
-        // Return response
         return NextResponse.json({
             success: true,
-            appointment: newAppointment,
+            appointment: newAppointment[0],
             isFirstConsult,
             message: meetingLinkCreated
                 ? 'Session scheduled successfully with Google Meet link!'
                 : 'Session scheduled successfully! Meeting link will be sent separately.',
-            warning: !meetingLinkCreated
-                ? 'Google Meet link could not be created. Please check your Google Calendar connection or send the meeting link manually.'
-                : undefined
         });
 
     } catch (error) {
