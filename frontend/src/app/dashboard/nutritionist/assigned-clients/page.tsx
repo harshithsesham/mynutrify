@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Calendar, User, FileText, MessageSquare, TrendingUp, AlertCircle } from 'lucide-react';
+import { Calendar, User, FileText, MessageSquare, TrendingUp, AlertCircle, Clock } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 
@@ -157,24 +157,27 @@ export default function AssignedClientsPage() {
                 });
 
                 if (response.ok) {
+                    const result = await response.json();
+                    console.log('Scheduling result:', result);
                     alert('Session scheduled successfully! Client has been notified.');
                     onClose();
                     fetchAssignedClients();
                 } else {
-                    throw new Error('Failed to schedule session');
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to schedule session');
                 }
             } catch (error) {
                 console.error('Error scheduling session:', error);
-                alert('Error scheduling session. Please try again.');
+                alert(`Error scheduling session: ${error instanceof Error ? error.message : 'Please try again.'}`);
             } finally {
                 setIsScheduling(false);
             }
         };
 
-        // Generate time slots based on availability
+        // Generate time slots for 24/7 availability (since no availability checks)
         const generateTimeSlots = () => {
             const slots = [];
-            for (let hour = 9; hour < 18; hour++) {
+            for (let hour = 0; hour < 24; hour++) {
                 slots.push(`${hour.toString().padStart(2, '0')}:00`);
                 slots.push(`${hour.toString().padStart(2, '0')}:30`);
             }
@@ -187,6 +190,19 @@ export default function AssignedClientsPage() {
                     <h2 className="text-2xl font-bold mb-6">
                         Schedule Session for {client.client.full_name}
                     </h2>
+
+                    {/* No Availability Restrictions Notice */}
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                        <div className="flex items-center gap-2">
+                            <Clock size={20} className="text-green-600" />
+                            <div>
+                                <h4 className="font-medium text-green-800">Flexible Scheduling</h4>
+                                <p className="text-sm text-green-700">
+                                    As a nutritionist, you can schedule sessions at any time. No availability restrictions.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
                     <div className="space-y-6">
                         {/* Session Type */}
@@ -202,6 +218,9 @@ export default function AssignedClientsPage() {
                                 <option value="progress-review">Progress Review</option>
                                 <option value="plan-adjustment">Plan Adjustment</option>
                                 <option value="emergency">Emergency Consultation</option>
+                                <option value="check-in">Quick Check-in</option>
+                                <option value="meal-planning">Meal Planning Session</option>
+                                <option value="goal-setting">Goal Setting</option>
                             </select>
                         </div>
 
@@ -215,6 +234,9 @@ export default function AssignedClientsPage() {
                                 onChange={(e) => setSelectedDate(e.target.value)}
                                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             />
+                            <p className="text-xs text-gray-500 mt-1">
+                                You can schedule for any future date
+                            </p>
                         </div>
 
                         {/* Time Selection */}
@@ -226,12 +248,22 @@ export default function AssignedClientsPage() {
                                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="">Choose time...</option>
-                                {generateTimeSlots().map(slot => (
-                                    <option key={slot} value={slot}>
-                                        {slot}
-                                    </option>
-                                ))}
+                                {generateTimeSlots().map(slot => {
+                                    const [hour, minute] = slot.split(':');
+                                    const hour12 = parseInt(hour) === 0 ? 12 : parseInt(hour) > 12 ? parseInt(hour) - 12 : parseInt(hour);
+                                    const ampm = parseInt(hour) >= 12 ? 'PM' : 'AM';
+                                    const displayTime = `${hour12}:${minute} ${ampm}`;
+
+                                    return (
+                                        <option key={slot} value={slot}>
+                                            {displayTime} (IST)
+                                        </option>
+                                    );
+                                })}
                             </select>
+                            <p className="text-xs text-gray-500 mt-1">
+                                🇮🇳 Times shown in India Standard Time (IST)
+                            </p>
                         </div>
 
                         {/* Duration */}
@@ -242,10 +274,12 @@ export default function AssignedClientsPage() {
                                 onChange={(e) => setDuration(e.target.value)}
                                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             >
+                                <option value="15">15 minutes</option>
                                 <option value="30">30 minutes</option>
                                 <option value="45">45 minutes</option>
                                 <option value="60">1 hour</option>
                                 <option value="90">1.5 hours</option>
+                                <option value="120">2 hours</option>
                             </select>
                         </div>
 
@@ -257,8 +291,8 @@ export default function AssignedClientsPage() {
                             <textarea
                                 value={sessionNotes}
                                 onChange={(e) => setSessionNotes(e.target.value)}
-                                rows={3}
-                                placeholder="What will be covered in this session..."
+                                rows={4}
+                                placeholder="What will be covered in this session...&#10;- Review current progress&#10;- Adjust meal plan&#10;- Discuss challenges&#10;- Set new goals"
                                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
@@ -267,11 +301,12 @@ export default function AssignedClientsPage() {
                         <div className="bg-gray-50 p-4 rounded-lg">
                             <h4 className="font-medium mb-2">Client Summary</h4>
                             <div className="text-sm text-gray-600 space-y-1">
-                                <p>Sessions Completed: {client.sessions_count}</p>
+                                <p><strong>Sessions Completed:</strong> {client.sessions_count}</p>
                                 {client.last_session_date && (
-                                    <p>Last Session: {format(parseISO(client.last_session_date), 'MMM dd, yyyy')}</p>
+                                    <p><strong>Last Session:</strong> {format(parseISO(client.last_session_date), 'MMM dd, yyyy')}</p>
                                 )}
-                                <p>Assignment Reason: {client.assignment_reason}</p>
+                                <p><strong>Assignment Reason:</strong> {client.assignment_reason}</p>
+                                <p><strong>Email:</strong> {client.client.email}</p>
                             </div>
                         </div>
                     </div>
@@ -306,7 +341,15 @@ export default function AssignedClientsPage() {
 
     return (
         <div className="max-w-6xl mx-auto px-4 py-8">
-            <h1 className="text-3xl font-bold mb-8">My Assigned Clients</h1>
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold mb-2">My Assigned Clients</h1>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p className="text-blue-800 text-sm">
+                        🇮🇳 <strong>Nutritionist Scheduling:</strong> You can schedule sessions with your clients at any time.
+                        All scheduling is done in India Standard Time (IST) for consistency.
+                    </p>
+                </div>
+            </div>
 
             {clients.length === 0 ? (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
@@ -351,6 +394,10 @@ export default function AssignedClientsPage() {
                                                 {format(parseISO(client.last_session_date), 'MMM dd')}
                                             </div>
                                         )}
+                                        <div>
+                                            <span className="font-medium">Status:</span> {' '}
+                                            <span className="text-green-600 font-semibold">Active</span>
+                                        </div>
                                     </div>
 
                                     {/* Assignment Reason */}
@@ -366,7 +413,7 @@ export default function AssignedClientsPage() {
                                     {client.next_appointment ? (
                                         <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
                                             <p className="text-sm font-medium text-green-800">
-                                                Next Session: {format(parseISO(client.next_appointment.start_time), 'MMM dd, h:mm a')}
+                                                Next Session: {format(parseISO(client.next_appointment.start_time), 'MMM dd, h:mm a')} IST
                                             </p>
                                         </div>
                                     ) : (
@@ -387,7 +434,7 @@ export default function AssignedClientsPage() {
                                                 setSelectedClient(client);
                                                 setShowScheduler(true);
                                             }}
-                                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"
                                         >
                                             <Calendar size={16} />
                                             Schedule Session
@@ -395,7 +442,7 @@ export default function AssignedClientsPage() {
 
                                         <Link
                                             href={`/dashboard/my-clients/${client.client_id}/plans`}
-                                            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2"
+                                            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2 font-medium"
                                         >
                                             <FileText size={16} />
                                             Nutrition Plans
@@ -403,7 +450,7 @@ export default function AssignedClientsPage() {
 
                                         <Link
                                             href={`/dashboard/clients/${client.client_id}/progress`}
-                                            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2"
+                                            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2 font-medium"
                                         >
                                             <TrendingUp size={16} />
                                             View Progress
@@ -411,7 +458,7 @@ export default function AssignedClientsPage() {
 
                                         <Link
                                             href={`/dashboard/messages?to=${client.client_id}`}
-                                            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2"
+                                            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2 font-medium"
                                         >
                                             <MessageSquare size={16} />
                                             Message

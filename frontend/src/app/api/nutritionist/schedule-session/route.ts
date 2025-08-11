@@ -3,6 +3,9 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { addHours, isAfter, parseISO } from 'date-fns';
+import { toZonedTime, format as formatTz } from 'date-fns-tz';
+
+const INDIA_TIMEZONE = 'Asia/Kolkata';
 
 export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies });
@@ -78,16 +81,27 @@ export async function POST(req: NextRequest) {
             duration: duration + ' minutes'
         });
 
-        // Validation: Check if appointment is at least 1 hour in future
-        const minBookableTime = addHours(new Date(), 1);
-        if (!isAfter(appointmentStartTime, minBookableTime)) {
-            console.error('❌ Appointment too soon');
+        // For logging purposes - convert to India time
+        const appointmentInIndiaTime = toZonedTime(appointmentStartTime, INDIA_TIMEZONE);
+        console.log('🇮🇳 Appointment in India time:', {
+            utcTime: startTime,
+            indiaTime: formatTz(appointmentInIndiaTime, 'yyyy-MM-dd HH:mm:ss zzz', {
+                timeZone: INDIA_TIMEZONE
+            }),
+            hour: appointmentInIndiaTime.getHours(),
+            dayOfWeek: appointmentInIndiaTime.getDay()
+        });
+
+        // Only validate that appointment is not in the past
+        const now = new Date();
+        if (!isAfter(appointmentStartTime, now)) {
+            console.error('❌ Appointment in the past');
             return NextResponse.json({
-                error: 'Appointments must be scheduled at least 1 hour in advance'
+                error: 'Cannot schedule appointments in the past'
             }, { status: 400 });
         }
 
-        // Check for double-booking
+        // Check for double-booking (prevent scheduling over existing appointments)
         const { data: existingAppointment, error: conflictError } = await supabase
             .from('appointments')
             .select('id')
@@ -107,7 +121,7 @@ export async function POST(req: NextRequest) {
         if (existingAppointment) {
             console.error('❌ Time slot conflict');
             return NextResponse.json({
-                error: 'This time slot has been booked by someone else'
+                error: 'This time slot conflicts with an existing appointment'
             }, { status: 409 });
         }
 
@@ -286,12 +300,7 @@ export async function POST(req: NextRequest) {
             if (!meetingLinkCreated) {
                 console.log('📎 Attempting to add placeholder meeting link...');
 
-                // You can either:
-                // Option 1: Add a placeholder link
                 const placeholderLink = `Meeting link will be sent separately`;
-
-                // Option 2: Generate a unique meeting room (if you have a backup service)
-                // const placeholderLink = `https://meet.jit.si/nutrishiksha-${newAppointment.id}`;
 
                 await supabase
                     .from('appointments')
@@ -305,7 +314,7 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        console.log('🎉 Session scheduling completed');
+        console.log('🎉 Session scheduling completed - NO AVAILABILITY RESTRICTIONS');
 
         // Return response
         return NextResponse.json({
@@ -317,7 +326,15 @@ export async function POST(req: NextRequest) {
                 : 'Session scheduled successfully! Meeting link will be sent separately.',
             warning: !meetingLinkCreated
                 ? 'Google Meet link could not be created. Please check your Google Calendar connection or send the meeting link manually.'
-                : undefined
+                : undefined,
+            scheduling_info: {
+                availability_checks: 'DISABLED - Nutritionist can schedule anytime',
+                conflict_checks: 'ENABLED - Prevents double booking',
+                past_appointment_check: 'ENABLED - Prevents past appointments',
+                appointment_time_ist: formatTz(appointmentInIndiaTime, 'yyyy-MM-dd HH:mm:ss zzz', {
+                    timeZone: INDIA_TIMEZONE
+                })
+            }
         });
 
     } catch (error) {
