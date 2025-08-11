@@ -7,18 +7,20 @@ import { MessageSquare, FileText, Video, Clock, CheckCircle, User } from 'lucide
 import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 
+type Nutritionist = {
+    id: string;
+    full_name: string;
+    bio: string | null;
+    specializations: string[] | null;
+    hourly_rate: number | null;
+    timezone: string | null;
+};
+
 type NutritionistAssignment = {
     id: string;
-    nutritionist: {
-        id: string;
-        full_name: string;
-        bio: string;
-        specializations: string[];
-        hourly_rate: number;
-        timezone: string;
-    };
-    assigned_at: string;
-    assignment_reason: string;
+    assigned_at: string | null;
+    assignment_reason: string | null;
+    nutritionist: Nutritionist;
 };
 
 type Appointment = {
@@ -27,8 +29,17 @@ type Appointment = {
     end_time: string;
     meeting_link: string | null;
     session_notes: string | null;
-    session_type: string;
+    session_type: string | null;
     status: string;
+};
+
+type AssignmentRow = {
+    id: string;
+    assigned_at: string | null;
+    assignment_reason: string | null;
+    status: string;
+    // Supabase join can be object OR array depending on relationship metadata
+    nutritionist: Nutritionist | Nutritionist[] | null;
 };
 
 export default function MyNutritionistPage() {
@@ -39,74 +50,110 @@ export default function MyNutritionistPage() {
     const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
 
     const fetchData = useCallback(async () => {
+        setLoading(true);
         try {
-            // Get current user's profile
-            const { data: { user } } = await supabase.auth.getUser();
+            // 1) Auth user
+            const {
+                data: { user },
+                error: userErr,
+            } = await supabase.auth.getUser();
+            if (userErr) throw userErr;
             if (!user) return;
 
-            const { data: profile } = await supabase
+            // 2) Profile id
+            const { data: profile, error: profileErr } = await supabase
                 .from('profiles')
                 .select('id')
                 .eq('user_id', user.id)
                 .single();
-
+            if (profileErr) throw profileErr;
             if (!profile) return;
 
-            // Get nutritionist assignment
-            const { data: assignmentData } = await supabase
+            // 3) Active nutritionist assignment (JOIN)
+            const { data: assignmentData, error: assignErr } = await supabase
                 .from('nutritionist_assignments')
-                .select(`
-                    id,
-                    assigned_at,
-                    assignment_reason,
-                    nutritionist:nutritionist_id(
-                        id,
-                        full_name,
-                        bio,
-                        specializations,
-                        hourly_rate,
-                        timezone
-                    )
-                `)
+                .select(
+                    `
+          id,
+          assigned_at,
+          assignment_reason,
+          status,
+          nutritionist:nutritionist_id (
+            id,
+            full_name,
+            bio,
+            specializations,
+            hourly_rate,
+            timezone
+          )
+        `
+                )
                 .eq('client_id', profile.id)
                 .eq('status', 'active')
-                .single();
+                .maybeSingle()
+                .returns<AssignmentRow>(); // <-- key for correct TS type
 
-            if (assignmentData && assignmentData.nutritionist && Array.isArray(assignmentData.nutritionist) && assignmentData.nutritionist.length > 0) {
-                // Transform the data to match our expected type
-                const transformedAssignment: NutritionistAssignment = {
+            if (assignErr) throw assignErr;
+
+            // Normalize object | array | null
+            const nut: Nutritionist | null =
+                assignmentData?.nutritionist == null
+                    ? null
+                    : Array.isArray(assignmentData.nutritionist)
+                        ? assignmentData.nutritionist[0] ?? null
+                        : assignmentData.nutritionist;
+
+            if (assignmentData && nut) {
+                const transformed: NutritionistAssignment = {
                     id: assignmentData.id,
                     assigned_at: assignmentData.assigned_at,
                     assignment_reason: assignmentData.assignment_reason,
-                    nutritionist: assignmentData.nutritionist[0] // Take the first (and should be only) nutritionist
+                    nutritionist: nut,
                 };
 
-                setAssignment(transformedAssignment);
+                setAssignment(transformed);
 
-                // Get appointments with this nutritionist
-                const { data: appointments } = await supabase
+                // 4) Fetch appointments for this nutritionist + client
+                const { data: appointments, error: apptErr } = await supabase
                     .from('appointments')
-                    .select('*')
+                    .select(
+                        'id,start_time,end_time,meeting_link,session_notes,session_type,status,client_id,professional_id'
+                    )
                     .eq('client_id', profile.id)
-                    .eq('professional_id', assignmentData.nutritionist[0].id)
+                    .eq('professional_id', nut.id)
                     .order('start_time', { ascending: true });
+
+                if (apptErr) throw apptErr;
 
                 if (appointments) {
                     const now = new Date();
                     setUpcomingAppointments(
-                        appointments.filter((apt: Appointment) =>
-                            new Date(apt.start_time) > now && apt.status === 'confirmed'
+                        appointments.filter(
+                            (apt: Appointment) =>
+                                new Date(apt.start_time) > now && apt.status === 'confirmed'
                         )
                     );
                     setPastAppointments(
-                        appointments.filter((apt: Appointment) =>
-                            new Date(apt.start_time) <= now || apt.status !== 'confirmed'
+                        appointments.filter(
+                            (apt: Appointment) =>
+                                new Date(apt.start_time) <= now || apt.status !== 'confirmed'
                         )
                     );
+                } else {
+                    setUpcomingAppointments([]);
+                    setPastAppointments([]);
                 }
+            } else {
+                // no active assignment
+                setAssignment(null);
+                setUpcomingAppointments([]);
+                setPastAppointments([]);
             }
-        } catch (error) {
-            console.error('Error fetching data:', error);
+        } catch (err) {
+            console.error('MyNutritionistPage fetchData error:', err);
+            setAssignment(null);
+            setUpcomingAppointments([]);
+            setPastAppointments([]);
         } finally {
             setLoading(false);
         }
@@ -119,7 +166,7 @@ export default function MyNutritionistPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800" />
             </div>
         );
     }
@@ -158,26 +205,31 @@ export default function MyNutritionistPage() {
                                 {assignment.nutritionist.full_name}
                             </h2>
                             <p className="text-gray-600 mb-4">
-                                {assignment.nutritionist.specializations?.join(', ')}
+                                {(assignment.nutritionist.specializations ?? []).join(', ')}
                             </p>
                             {assignment.nutritionist.bio && (
-                                <p className="text-gray-700 mb-4">
-                                    {assignment.nutritionist.bio}
-                                </p>
+                                <p className="text-gray-700 mb-4">{assignment.nutritionist.bio}</p>
                             )}
                             <div className="text-sm text-gray-600">
-                                <p>Assigned on: {format(parseISO(assignment.assigned_at), 'MMMM dd, yyyy')}</p>
+                                {assignment.assigned_at && (
+                                    <p>
+                                        Assigned on:{' '}
+                                        {format(parseISO(assignment.assigned_at), 'MMMM dd, yyyy')}
+                                    </p>
+                                )}
                                 {assignment.assignment_reason && (
                                     <p className="mt-1">Reason: {assignment.assignment_reason}</p>
                                 )}
                             </div>
                         </div>
                         <div className="text-right">
-                            <p className="text-lg font-semibold">
-                                ₹{assignment.nutritionist.hourly_rate}/hour
-                            </p>
+                            {assignment.nutritionist.hourly_rate !== null && (
+                                <p className="text-lg font-semibold">
+                                    ₹{assignment.nutritionist.hourly_rate}/hour
+                                </p>
+                            )}
                             <p className="text-sm text-gray-500">
-                                Timezone: {assignment.nutritionist.timezone}
+                                Timezone: {assignment.nutritionist.timezone ?? '—'}
                             </p>
                         </div>
                     </div>
@@ -189,11 +241,10 @@ export default function MyNutritionistPage() {
                         <div className="flex items-center gap-3">
                             <Clock className="text-blue-600" size={24} />
                             <div>
-                                <p className="font-medium text-blue-900">
-                                    Awaiting Schedule
-                                </p>
+                                <p className="font-medium text-blue-900">Awaiting Schedule</p>
                                 <p className="text-sm text-blue-700">
-                                    Your nutritionist will schedule your next session based on your progress and needs.
+                                    Your nutritionist will schedule your next session based on your
+                                    progress and needs.
                                 </p>
                             </div>
                         </div>
@@ -232,7 +283,7 @@ export default function MyNutritionistPage() {
                                             {format(parseISO(apt.start_time), 'EEEE, MMMM do, yyyy')}
                                         </p>
                                         <p className="text-gray-600">
-                                            {format(parseISO(apt.start_time), 'h:mm a')} -
+                                            {format(parseISO(apt.start_time), 'h:mm a')} -{' '}
                                             {format(parseISO(apt.end_time), 'h:mm a')}
                                         </p>
                                         {apt.session_type && (
@@ -277,7 +328,7 @@ export default function MyNutritionistPage() {
                                             {format(parseISO(apt.start_time), 'MMM dd, yyyy')}
                                         </p>
                                         <p className="text-sm text-gray-600">
-                                            {apt.session_type || 'Regular Session'}
+                                            {apt.session_type ?? 'Regular Session'}
                                         </p>
                                     </div>
                                     <CheckCircle className="text-green-600" size={20} />
