@@ -1,4 +1,3 @@
-// app/dashboard/nutritionist/assigned-clients/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -187,7 +186,7 @@ export default function AssignedClientsPage() {
         return (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                 <div className="bg-white rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                    <h2 className="text-2xl font-bold mb-6">
+                    <h2 className="text-2xl font-bold mb-6 text-gray-900">
                         Schedule Session for {client.client.full_name}
                     </h2>
 
@@ -207,7 +206,7 @@ export default function AssignedClientsPage() {
                     <div className="space-y-6">
                         {/* Session Type */}
                         <div>
-                            <label className="block font-medium mb-2">Session Type</label>
+                            <label className="block font-medium mb-2 text-gray-900">Session Type</label>
                             <select
                                 value={sessionType}
                                 onChange={(e) => setSessionType(e.target.value)}
@@ -226,7 +225,7 @@ export default function AssignedClientsPage() {
 
                         {/* Date Selection */}
                         <div>
-                            <label className="block font-medium mb-2">Select Date</label>
+                            <label className="block font-medium mb-2 text-gray-900">Select Date</label>
                             <input
                                 type="date"
                                 value={selectedDate}
@@ -241,7 +240,7 @@ export default function AssignedClientsPage() {
 
                         {/* Time Selection */}
                         <div>
-                            <label className="block font-medium mb-2">Select Time</label>
+                            <label className="block font-medium mb-2 text-gray-900">Select Time</label>
                             <select
                                 value={selectedTime}
                                 onChange={(e) => setSelectedTime(e.target.value)}
@@ -268,7 +267,7 @@ export default function AssignedClientsPage() {
 
                         {/* Duration */}
                         <div>
-                            <label className="block font-medium mb-2">Duration</label>
+                            <label className="block font-medium mb-2 text-gray-900">Duration</label>
                             <select
                                 value={duration}
                                 onChange={(e) => setDuration(e.target.value)}
@@ -285,7 +284,7 @@ export default function AssignedClientsPage() {
 
                         {/* Session Notes */}
                         <div>
-                            <label className="block font-medium mb-2">
+                            <label className="block font-medium mb-2 text-gray-900">
                                 Session Agenda/Notes for Client
                             </label>
                             <textarea
