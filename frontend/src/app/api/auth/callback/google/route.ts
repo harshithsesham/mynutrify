@@ -1,11 +1,16 @@
-// app/api/auth/callback/google/route.ts
+// frontend/src/app/api/auth/callback/google/route.ts
 import { google } from 'googleapis';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(req: NextRequest) {
-    const supabase = createRouteHandlerClient({ cookies });
+    // FIX: Await cookies() for Next.js 15 compatibility
+    const cookieStore = await cookies();
+
+    // FIX: Pass the awaited cookie store
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any });
+
     const url = new URL(req.url);
     const code = url.searchParams.get('code');
     const error = url.searchParams.get('error');

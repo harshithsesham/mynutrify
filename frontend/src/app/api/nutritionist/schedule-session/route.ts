@@ -1,4 +1,4 @@
-// app/api/nutritionist/schedule-session/route.ts
+// frontend/src/app/api/nutritionist/schedule-session/route.ts
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
@@ -8,7 +8,11 @@ import { toZonedTime, format as formatTz } from 'date-fns-tz';
 const INDIA_TIMEZONE = 'Asia/Kolkata';
 
 export async function POST(req: NextRequest) {
-    const supabase = createRouteHandlerClient({ cookies });
+    // FIX: Await cookies() for Next.js 15 compatibility
+    const cookieStore = await cookies();
+
+    // FIX: Pass the awaited cookie store and cast to any to bypass type mismatch
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any });
 
     try {
         console.log('🔥 Schedule session API called');
@@ -243,9 +247,15 @@ export async function POST(req: NextRequest) {
             console.log('🔗 Calling create-meeting API with payload:', JSON.stringify(meetingPayload, null, 2));
 
             // Call the create-meeting API
-            const meetingResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/create-meeting`, {
+            // Use the absolute URL including protocol and host
+            const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+            const meetingResponse = await fetch(`${baseUrl}/api/create-meeting`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Pass the cookie so the internal API call is authenticated if needed
+                    'Cookie': req.headers.get('cookie') || ''
+                },
                 body: JSON.stringify(meetingPayload),
             });
 

@@ -1,4 +1,4 @@
-// app/api/create-meeting/route.ts
+// frontend/src/app/api/create-meeting/route.ts
 import { google } from 'googleapis';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
@@ -7,7 +7,11 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(req: NextRequest) {
     console.log('🎯 Create meeting API called');
 
-    const supabase = createRouteHandlerClient({ cookies });
+    // FIX: Await cookies() for Next.js 15 compatibility
+    const cookieStore = await cookies();
+
+    // FIX: Pass the awaited cookie store
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any });
 
     try {
         const body = await req.json();
