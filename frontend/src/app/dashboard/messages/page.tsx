@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useSearchParams } from 'next/navigation';
-import {Send, User, Loader2, MessageSquare} from 'lucide-react';
+import { Send, User, Loader2, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 
 type Message = {
@@ -20,7 +20,7 @@ type ChatProfile = {
     role: string;
 };
 
-export default function MessagesPage() {
+function MessagesContent() {
     const supabase = createClientComponentClient();
     const searchParams = useSearchParams();
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -252,5 +252,17 @@ export default function MessagesPage() {
                 </div>
             </form>
         </div>
+    );
+}
+
+export default function MessagesPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-[80vh] items-center justify-center">
+                <Loader2 className="animate-spin text-blue-600" size={32} />
+            </div>
+        }>
+            <MessagesContent />
+        </Suspense>
     );
 }
