@@ -233,7 +233,7 @@ export default function AssignedClientsPage() {
                                 onChange={(e) => setSelectedDate(e.target.value)}
                                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-black"
                             />
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="text-xs text-black mt-1">
                                 You can schedule for any future date
                             </p>
                         </div>
@@ -260,7 +260,7 @@ export default function AssignedClientsPage() {
                                     );
                                 })}
                             </select>
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="text-xs text-black mt-1">
                                 🇮🇳 Times shown in India Standard Time (IST)
                             </p>
                         </div>
@@ -320,7 +320,7 @@ export default function AssignedClientsPage() {
                         </button>
                         <button
                             onClick={onClose}
-                            className="flex-1 bg-gray-200 text-gray-800 font-bold py-3 rounded-lg hover:bg-gray-300 transition-colors"
+                            className="flex-1 bg-gray-200 text-black font-bold py-3 rounded-lg hover:bg-gray-300 transition-colors"
                         >
                             Cancel
                         </button>
@@ -352,9 +352,9 @@ export default function AssignedClientsPage() {
 
             {clients.length === 0 ? (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-                    <User size={48} className="mx-auto text-gray-400 mb-4" />
+                    <User size={48} className="mx-auto text-black mb-4" />
                     <h2 className="text-xl font-semibold mb-2 text-black">No Assigned Clients Yet</h2>
-                    <p className="text-gray-600">
+                    <p className="text-black">
                         You&apos;ll see clients here once they are assigned to you by health coaches.
                     </p>
                 </div>
@@ -366,7 +366,7 @@ export default function AssignedClientsPage() {
                                 <div className="flex-1">
                                     <div className="flex items-center gap-4 mb-3">
                                         <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-                                            <User size={24} className="text-gray-600" />
+                                            <User size={24} className="text-black" />
                                         </div>
                                         <div>
                                             <h3 className="text-xl font-bold text-black">
@@ -378,7 +378,7 @@ export default function AssignedClientsPage() {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-800 mb-4">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-black mb-4">
                                         <div>
                                             <span className="font-medium">Assigned:</span> {' '}
                                             {format(parseISO(client.assigned_at), 'MMM dd, yyyy')}
@@ -441,7 +441,7 @@ export default function AssignedClientsPage() {
 
                                         <Link
                                             href={`/dashboard/my-clients/${client.client_id}/plans`}
-                                            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2 font-medium"
+                                            className="bg-gray-200 text-black px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2 font-medium"
                                         >
                                             <FileText size={16} />
                                             Nutrition Plans
@@ -449,7 +449,7 @@ export default function AssignedClientsPage() {
 
                                         <Link
                                             href={`/dashboard/clients/${client.client_id}/progress`}
-                                            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2 font-medium"
+                                            className="bg-gray-200 text-black px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2 font-medium"
                                         >
                                             <TrendingUp size={16} />
                                             View Progress
@@ -457,7 +457,7 @@ export default function AssignedClientsPage() {
 
                                         <Link
                                             href={`/dashboard/messages?to=${client.client_id}`}
-                                            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2 font-medium"
+                                            className="bg-gray-200 text-black px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2 font-medium"
                                         >
                                             <MessageSquare size={16} />
                                             Message
