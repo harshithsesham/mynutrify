@@ -297,9 +297,9 @@ export default function AssignedClientsPage() {
                         </div>
 
                         {/* Client History Summary */}
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <h4 className="font-medium mb-2">Client Summary</h4>
-                            <div className="text-sm text-gray-600 space-y-1">
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <h4 className="font-bold mb-2 text-gray-900">Client Summary</h4>
+                            <div className="text-sm text-gray-800 space-y-1">
                                 <p><strong>Sessions Completed:</strong> {client.sessions_count}</p>
                                 {client.last_session_date && (
                                     <p><strong>Last Session:</strong> {format(parseISO(client.last_session_date), 'MMM dd, yyyy')}</p>
@@ -369,10 +369,10 @@ export default function AssignedClientsPage() {
                                             <User size={24} className="text-gray-600" />
                                         </div>
                                         <div>
-                                            <h3 className="text-xl font-semibold">
+                                            <h3 className="text-xl font-bold text-gray-900">
                                                 {client.client.full_name}
                                             </h3>
-                                            <p className="text-sm text-gray-600">
+                                            <p className="text-sm text-gray-700 font-medium">
                                                 {client.client.email}
                                             </p>
                                         </div>
@@ -401,9 +401,9 @@ export default function AssignedClientsPage() {
 
                                     {/* Assignment Reason */}
                                     {client.assignment_reason && (
-                                        <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                                            <p className="text-sm">
-                                                <span className="font-medium">Assignment Note:</span> {client.assignment_reason}
+                                        <div className="bg-gray-50 rounded-lg p-3 mb-4 border border-gray-200">
+                                            <p className="text-sm text-gray-900">
+                                                <span className="font-bold">Assignment Note:</span> {client.assignment_reason}
                                             </p>
                                         </div>
                                     )}
