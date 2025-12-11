@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useSearchParams } from 'next/navigation';
-import { Send, User, Loader2, MessageSquare, ArrowLeft, Users, CornerUpRight } from 'lucide-react';
-import { format } from 'date-fns';
+import { Send, User, Loader2, MessageSquare, Users, Clock, UserPlus } from 'lucide-react';
+import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import Link from 'next/link';
 
+// --- Types ---
 type Message = {
     id: string;
     content: string;
@@ -21,12 +22,32 @@ type ChatProfile = {
     role: string;
 };
 
-// MOCK CONVERSATION LIST DATA (In a real app, this would be fetched from the server/API)
-const mockConversations = [
-    { id: 'pro_1', full_name: 'Dr. Jane Smith (Nutritionist)', role: 'nutritionist', last_message: 'Your new plan is ready.', last_time: '1:45 PM' },
-    { id: 'client_1', full_name: 'John Doe (Client)', role: 'client', last_message: 'When is our next session?', last_time: '10:30 AM' },
-    { id: 'coach_1', full_name: 'Alex Lee (Health Coach)', role: 'health_coach', last_message: 'New consultation request assigned.', last_time: 'Yesterday' },
-];
+type ConversationContact = ChatProfile & {
+    last_message_content: string;
+    last_message_time: string;
+};
+
+// Interface for the Supabase query results to fix TS errors
+interface ClientAssignmentResult {
+    nutritionist: ChatProfile | ChatProfile[] | null;
+}
+
+interface ProAssignmentResult {
+    client: ChatProfile | ChatProfile[] | null;
+}
+
+// Helper function to safely extract the profile object from nested join results
+const extractProfile = (nestedData: any): ChatProfile | null => {
+    if (Array.isArray(nestedData) && nestedData.length > 0) {
+        return nestedData[0] as ChatProfile;
+    }
+    if (nestedData && typeof nestedData === 'object' && 'id' in nestedData) {
+        return nestedData as ChatProfile;
+    }
+    return null;
+};
+
+// --- Conversation List Component ---
 
 interface ConversationListProps {
     myProfile: ChatProfile;
@@ -36,24 +57,93 @@ interface ConversationListProps {
 }
 
 const ConversationList = ({ myProfile, activeChatUser, setActiveChatUser, currentToId }: ConversationListProps) => {
-    // Determine which profile is the current user's contact in the mock data
-    const list = mockConversations.filter(c => c.id !== myProfile.id);
+    const supabase = createClientComponentClient();
+    const [conversations, setConversations] = useState<ConversationContact[]>([]);
+    const [loadingContacts, setLoadingContacts] = useState(true);
+
+    const fetchConversations = useCallback(async () => {
+        setLoadingContacts(true);
+        let contacts: ChatProfile[] = [];
+
+        // --- FETCH LOGIC ---
+        if (myProfile.role === 'client') {
+            const { data: assignments } = await supabase
+                .from('nutritionist_assignments')
+                .select(`
+                    nutritionist:nutritionist_id(id, full_name, role)
+                `)
+                .eq('client_id', myProfile.id)
+                .eq('status', 'active');
+
+            if (assignments) {
+                // Safely iterate over the results and extract the nested profile
+                contacts = (assignments as ClientAssignmentResult[])
+                    .map(a => extractProfile(a.nutritionist))
+                    .filter((p): p is ChatProfile => p !== null);
+            }
+
+        } else if (myProfile.role === 'nutritionist') {
+            const { data: assignments } = await supabase
+                .from('nutritionist_assignments')
+                .select(`
+                    client:client_id(id, full_name, role)
+                `)
+                .eq('nutritionist_id', myProfile.id)
+                .eq('status', 'active');
+
+            if (assignments) {
+                // Safely iterate over the results and extract the nested profile
+                contacts = (assignments as ProAssignmentResult[])
+                    .map(a => extractProfile(a.client))
+                    .filter((p): p is ChatProfile => p !== null);
+            }
+        }
+        // --- END FETCH LOGIC ---
+
+        // 2. Augment contacts with placeholder message details (last message fetching would go here)
+        const conversationsWithDetails: ConversationContact[] = contacts.map(contact => ({
+            ...contact,
+            last_message_content: 'No history available...',
+            last_message_time: formatDistanceToNow(new Date(), { addSuffix: true }),
+        }));
+
+        setConversations(conversationsWithDetails);
+        setLoadingContacts(false);
+    }, [supabase, myProfile.id, myProfile.role]);
+
+    useEffect(() => {
+        fetchConversations();
+    }, [fetchConversations]);
+
+    const handleSelectContact = (contact: ConversationContact) => {
+        setActiveChatUser(contact);
+    };
 
     return (
         <div className="h-full border-r border-gray-200 flex flex-col bg-white">
             <h3 className="text-xl font-bold p-4 border-b text-gray-900 flex items-center gap-2">
-                <Users size={20} className="text-teal-600" /> Conversations
+                <Users size={20} className="text-teal-600" /> Contacts ({conversations.length})
             </h3>
             <div className="flex-1 overflow-y-auto">
-                {list.length === 0 ? (
-                    <p className="p-4 text-gray-500 text-sm">No active conversations yet.</p>
+                {loadingContacts ? (
+                    <div className="p-4 text-center">
+                        <Loader2 size={24} className="animate-spin text-teal-600 mx-auto" />
+                        <p className="text-sm text-gray-600 mt-2">Loading contacts...</p>
+                    </div>
+                ) : conversations.length === 0 ? (
+                    <p className="p-4 text-gray-500 text-sm">
+                        {myProfile.role === 'client'
+                            ? 'You have not been assigned a professional yet.'
+                            : 'You have no active assigned clients.'
+                        }
+                    </p>
                 ) : (
-                    list.map((contact) => (
+                    conversations.map((contact) => (
                         <button
                             key={contact.id}
-                            onClick={() => setActiveChatUser(contact as ChatProfile)}
+                            onClick={() => handleSelectContact(contact)}
                             className={`w-full text-left p-4 flex items-center gap-4 border-b hover:bg-gray-50 transition-colors ${
-                                (activeChatUser?.id === contact.id || currentToId === contact.id) ? 'bg-teal-50 border-l-4 border-teal-600' : ''
+                                (activeChatUser?.id === contact.id || currentToId === contact.id) ? 'bg-teal-50 border-l-4 border-teal-600' : 'border-l-4 border-transparent'
                             }`}
                         >
                             <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
@@ -62,25 +152,38 @@ const ConversationList = ({ myProfile, activeChatUser, setActiveChatUser, curren
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-center">
                                     <p className="font-semibold text-gray-900 truncate">{contact.full_name}</p>
-                                    <p className="text-xs text-gray-500 flex-shrink-0">{contact.last_time}</p>
+                                    <p className="text-xs text-gray-500 flex-shrink-0 flex items-center gap-1">
+                                        <Clock size={12} /> {contact.last_message_time.split(',')[0]}
+                                    </p>
                                 </div>
-                                <p className="text-sm text-gray-600 truncate">{contact.last_message}</p>
+                                <p className="text-sm text-gray-600 capitalize">{contact.role.replace('_', ' ')}</p>
+                                <p className="text-xs text-gray-500 truncate mt-1">{contact.last_message_content}</p>
                             </div>
                         </button>
                     ))
                 )}
             </div>
+            {/* Contextual Link */}
+            {myProfile.role === 'client' && (
+                <Link
+                    href="/dashboard/find-a-pro"
+                    className="p-4 border-t text-sm font-semibold text-teal-600 hover:text-teal-700 flex items-center justify-center gap-1 bg-gray-50"
+                >
+                    <UserPlus size={16} /> Find New Professional
+                </Link>
+            )}
         </div>
     );
 };
 
+
+// --- Main Message Content Component (Kept for completeness) ---
 
 function MessagesContent() {
     const supabase = createClientComponentClient();
     const searchParams = useSearchParams();
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // State
     const [myProfile, setMyProfile] = useState<ChatProfile | null>(null);
     const [activeChatUser, setActiveChatUser] = useState<ChatProfile | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -88,39 +191,38 @@ function MessagesContent() {
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
 
-    // Extracted ID from URL for initial load
     const initialToId = searchParams.get('to');
-    const [currentToId, setCurrentToId] = useState<string | null>(initialToId);
+    const [currentToId] = useState<string | null>(initialToId);
 
     // 1. Initialize: Get my profile and the person we want to talk to
     useEffect(() => {
         const init = async () => {
             try {
-                // Get current user
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
 
-                // Get my profile ID
                 const { data: profile } = await supabase
                     .from('profiles')
                     .select('id, full_name, role')
                     .eq('user_id', user.id)
                     .single();
 
-                setMyProfile(profile);
+                if (profile) {
+                    setMyProfile(profile);
 
-                // If initial 'to' ID exists, fetch their profile
-                if (currentToId) {
-                    const { data: recipient } = await supabase
-                        .from('profiles')
-                        .select('id, full_name, role')
-                        .eq('id', currentToId)
-                        .single();
+                    if (currentToId) {
+                        const { data: recipient } = await supabase
+                            .from('profiles')
+                            .select('id, full_name, role')
+                            .eq('id', currentToId)
+                            .single();
 
-                    if (recipient) {
-                        setActiveChatUser(recipient);
+                        if (recipient) {
+                            setActiveChatUser(recipient);
+                        }
                     }
                 }
+
             } catch (error) {
                 console.error('Error initializing chat:', error);
             } finally {
@@ -150,7 +252,7 @@ function MessagesContent() {
 
         fetchMessages();
 
-        // Real-time Subscription logic (similar to previous version)
+        // Real-time Subscription logic
         const channel = supabase
             .channel(`chat_room_${myProfile.id}_${activeChatUser.id}`)
             .on(
@@ -222,6 +324,7 @@ function MessagesContent() {
         return (
             <div className="flex h-[80vh] items-center justify-center bg-white rounded-xl shadow-xl">
                 <Loader2 className="animate-spin text-teal-600" size={32} />
+                <span className="ml-3 text-gray-700">Loading profile...</span>
             </div>
         );
     }
@@ -281,7 +384,7 @@ function MessagesContent() {
                                                         isMe ? 'text-teal-100' : 'text-gray-400'
                                                     }`}
                                                 >
-                                                    {format(new Date(msg.created_at), 'h:mm a')}
+                                                    {format(parseISO(msg.created_at), 'h:mm a')}
                                                 </p>
                                             </div>
                                         </div>
@@ -320,15 +423,8 @@ function MessagesContent() {
                         </div>
                         <h2 className="text-2xl font-bold text-gray-800 mb-2">Select a Conversation</h2>
                         <p className="text-gray-600 max-w-md">
-                            Choose a user from the left panel to view message history and begin chatting.
+                            Choose a contact from the left panel to start messaging with your assigned professional or client.
                         </p>
-                        <Link
-                            href="/dashboard/my-clients"
-                            className="mt-6 text-sm font-semibold text-teal-600 hover:text-teal-700 inline-flex items-center gap-1 transition-colors"
-                        >
-                            <CornerUpRight size={16} />
-                            Go to Clients/Nutritionists
-                        </Link>
                     </div>
                 )}
             </div>
