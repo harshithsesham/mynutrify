@@ -21,7 +21,7 @@ interface PlanData {
     target_protein?: number;
     target_carbs?: number;
     target_fats?: number;
-    created_by_id: string; // <--- FIELD ADDED HERE
+    created_by_id: string;
     creator: { full_name: string } | null;
 }
 
@@ -35,18 +35,20 @@ export default async function PlanDetailPage({ params }: PageProps): Promise<Rea
         redirect('/login');
     }
 
-    // 1. Get Client Profile ID
-    const { data: clientProfile } = await supabase
+    // 1. Get Client Profile ID (Used to check authorization)
+    const { data: clientProfile, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', session.user.id)
         .single();
 
-    if (!clientProfile) {
+    if (profileError || !clientProfile) {
         return redirect('/dashboard');
     }
 
-    // 2. Fetch the plan details and its entries, ensuring ALL necessary fields are selected.
+    const currentProfileId = clientProfile.id;
+
+    // 2. Fetch Plan Data and Entries
     const planPromise = supabase
         .from('nutrition_plans')
         .select(`
@@ -58,7 +60,7 @@ export default async function PlanDetailPage({ params }: PageProps): Promise<Rea
             target_protein, 
             target_carbs, 
             target_fats,
-            created_by_id,  <--- EXPLICITLY SELECTED TO AVOID CRASH
+            created_by_id,
             creator:created_by_id(full_name)
         `)
         .eq('id', planId)
@@ -71,22 +73,28 @@ export default async function PlanDetailPage({ params }: PageProps): Promise<Rea
 
     const [{ data: plan, error: planError }, { data: entries, error: entriesError }] = await Promise.all([planPromise, entriesPromise]);
 
-    // 3. Robust Failure Handling and Authorization Check
-    if (planError) {
-        console.error(`[PlanDetailPage] Error fetching plan ${planId}:`, planError);
+    // 3. Robust Failure Handling and Authorization Check (FIX)
+
+    // Redirect if the database query failed (e.g., plan not found, invalid ID)
+    if (planError || !plan) {
+        console.error(`[PlanDetailPage] Crash prevention redirect. Error: ${planError?.message || 'Plan not found.'}`);
         return redirect('/dashboard/my-plans');
     }
 
-    if (!plan) {
+    // FIX: Allow access if the user is the assigned client OR the plan creator.
+    const isAuthorized = (plan.assigned_to_id === currentProfileId) || (plan.created_by_id === currentProfileId);
+
+    if (!isAuthorized) {
+        console.warn(`[PlanDetailPage] Access denied for plan ${planId}. User is neither assigned client nor creator.`);
         return redirect('/dashboard/my-plans');
     }
 
     if (entriesError) {
         console.error(`[PlanDetailPage] Error fetching entries for plan ${planId}:`, entriesError);
-        // We log the error but allow rendering with no entries for a partial fix.
+        // We render the plan details even if entries fail to load, passing an empty array.
     }
 
-    // Ensure type compatibility before passing to client component
+    // Ensure type compatibility before passing to Client Component
     const typedPlan = plan as unknown as PlanData;
 
     return <PlanDetailClient plan={typedPlan} initialEntries={entries || []} />;
