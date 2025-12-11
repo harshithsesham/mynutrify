@@ -1,4 +1,4 @@
-// app/dashboard/components/Header.tsx
+// frontend/src/app/dashboard/components/Header.tsx
 'use client';
 
 import { Bell, UserCircle, Menu } from 'lucide-react';
@@ -36,24 +36,30 @@ export default function Header({ onMenuClick }: HeaderProps) {
     }, [supabase]);
 
     return (
-        <header className="bg-white border-b border-gray-200 h-20 flex items-center justify-between md:justify-end px-8">
+        // Added shadow-lg for a more premium, lifted look
+        <header className="bg-white shadow-md h-20 flex items-center justify-between md:justify-end px-4 sm:px-8 z-30">
             {/* Hamburger Menu Button - Only visible on mobile */}
             <button
                 onClick={onMenuClick}
-                className="md:hidden text-gray-500 hover:text-gray-800"
+                className="md:hidden text-gray-500 hover:text-teal-600 p-2 rounded-lg transition-colors"
             >
                 <Menu size={28} />
             </button>
 
             <div className="flex items-center gap-6">
-                <button className="text-gray-500 hover:text-gray-800">
+                <button
+                    title="Notifications"
+                    className="text-gray-500 hover:text-teal-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                >
                     <Bell size={24} />
                 </button>
                 <div className="flex items-center gap-3">
-                    <UserCircle size={32} className="text-gray-400" />
+                    {/* User profile icon in a subtle color */}
+                    <UserCircle size={36} className="text-gray-400" />
                     <div>
                         <p className="font-semibold text-gray-800">{profile?.full_name || 'User'}</p>
-                        <p className="text-sm text-gray-500 capitalize">{profile?.role || 'Role'}</p>
+                        {/* User role highlighted with the accent color */}
+                        <p className="text-sm text-teal-600 capitalize">{profile?.role || 'Role'}</p>
                     </div>
                 </div>
             </div>

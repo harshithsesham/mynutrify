@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useSearchParams } from 'next/navigation';
-import { Send, User, Loader2, MessageSquare } from 'lucide-react';
+import { Send, User, Loader2, MessageSquare, CornerUpRight } from 'lucide-react';
 import { format } from 'date-fns';
+import Link from "next/link";
 
 type Message = {
     id: string;
@@ -151,6 +152,8 @@ function MessagesContent() {
             if (error) throw error;
         } catch (error) {
             console.error('Error sending message:', error);
+            // Re-add the message content to input if it fails
+            setNewMessage(content);
             alert('Failed to send message');
         } finally {
             setSending(false);
@@ -160,31 +163,38 @@ function MessagesContent() {
     if (loading) {
         return (
             <div className="flex h-[80vh] items-center justify-center">
-                <Loader2 className="animate-spin text-blue-600" size={32} />
+                <Loader2 className="animate-spin text-teal-600" size={32} />
             </div>
         );
     }
 
     if (!activeChatUser) {
         return (
-            <div className="flex h-[80vh] flex-col items-center justify-center text-center p-4">
-                <div className="bg-gray-100 p-6 rounded-full mb-4">
-                    <MessageSquare size={48} className="text-gray-400" />
+            <div className="flex h-[85vh] flex-col items-center justify-center text-center p-4 bg-white rounded-xl shadow-xl border border-gray-100">
+                <div className="bg-teal-50 p-6 rounded-full mb-4 shadow-inner">
+                    <MessageSquare size={48} className="text-teal-600" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-2">No Conversation Selected</h2>
                 <p className="text-gray-600 max-w-md">
-                    Go back to "My Assigned Clients" or "Find a Pro" to start a conversation with someone.
+                    Use the sidebar navigation or go back to "My Assigned Clients" to start a conversation with your assigned professional/client.
                 </p>
+                <Link
+                    href="/dashboard/my-clients"
+                    className="mt-6 text-sm font-semibold text-teal-600 hover:text-teal-700 inline-flex items-center gap-1 transition-colors"
+                >
+                    <CornerUpRight size={16} />
+                    Go to Clients/Nutritionists
+                </Link>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-[85vh] bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
-            {/* Chat Header */}
+        <div className="flex flex-col h-[85vh] bg-white rounded-xl shadow-xl overflow-hidden border border-gray-100">
+            {/* Chat Header - Clean and Teal-accented */}
             <div className="bg-white border-b p-4 flex items-center gap-3 shadow-sm z-10">
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <User className="text-blue-600" size={20} />
+                <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User className="text-teal-600" size={20} />
                 </div>
                 <div>
                     <h2 className="font-bold text-lg text-gray-900">{activeChatUser.full_name}</h2>
@@ -195,11 +205,11 @@ function MessagesContent() {
                 </div>
             </div>
 
-            {/* Messages Area */}
+            {/* Messages Area - Light, spacious background */}
             <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-4">
                 {messages.length === 0 ? (
                     <div className="text-center py-10 text-gray-500 text-sm">
-                        No messages yet. Start the conversation!
+                        Say hello to {activeChatUser.full_name} to start your journey!
                     </div>
                 ) : (
                     messages.map((msg) => {
@@ -210,16 +220,16 @@ function MessagesContent() {
                                 className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
                             >
                                 <div
-                                    className={`max-w-[75%] p-3 rounded-2xl px-4 shadow-sm ${
+                                    className={`max-w-[75%] p-3 rounded-xl px-4 shadow-md ${
                                         isMe
-                                            ? 'bg-blue-600 text-white rounded-tr-none'
-                                            : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'
+                                            ? 'bg-teal-600 text-white rounded-br-none' // My messages in Teal
+                                            : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none' // Their messages are clean white
                                     }`}
                                 >
                                     <p className="text-sm leading-relaxed">{msg.content}</p>
                                     <p
                                         className={`text-[10px] mt-1 text-right ${
-                                            isMe ? 'text-blue-100' : 'text-gray-400'
+                                            isMe ? 'text-teal-100' : 'text-gray-400'
                                         }`}
                                     >
                                         {format(new Date(msg.created_at), 'h:mm a')}
@@ -232,20 +242,21 @@ function MessagesContent() {
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Area */}
+            {/* Input Area - Clean input field and Teal button */}
             <form onSubmit={handleSendMessage} className="p-4 bg-white border-t">
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                     <input
                         type="text"
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         placeholder="Type your message..."
-                        className="flex-1 p-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-gray-50"
+                        className="flex-1 p-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900 bg-gray-50 transition-shadow duration-200"
                     />
                     <button
                         type="submit"
                         disabled={!newMessage.trim() || sending}
-                        className="bg-blue-600 text-white p-3 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="bg-teal-600 text-white p-3 rounded-full hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
+                        title="Send Message"
                     >
                         <Send size={20} />
                     </button>
@@ -259,7 +270,7 @@ export default function MessagesPage() {
     return (
         <Suspense fallback={
             <div className="flex h-[80vh] items-center justify-center">
-                <Loader2 className="animate-spin text-blue-600" size={32} />
+                <Loader2 className="animate-spin text-teal-600" size={32} />
             </div>
         }>
             <MessagesContent />

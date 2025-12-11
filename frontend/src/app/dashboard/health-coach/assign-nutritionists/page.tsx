@@ -1,5 +1,4 @@
 // app/dashboard/health-coach/assign-nutritionists/page.tsx
-// Combined page with both assigning new clients and managing assigned clients
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -11,7 +10,6 @@ import {
     CheckCircle,
     AlertCircle,
     Search,
-    Calendar,
     UserPlus,
     UserMinus,
     MoreVertical,
@@ -20,12 +18,13 @@ import {
     MessageSquare,
     FileText,
     TrendingUp,
-    AlertTriangle
+    AlertTriangle,
+    Loader2
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 
-// Types
+// Types (Retained)
 type ConsultationRequest = {
     id: string;
     client_id: string;
@@ -78,7 +77,7 @@ type AssignedClient = {
     };
 };
 
-// Unassign Modal Component
+// Unassign Modal Component (Redesigned with Teal accents)
 const UnassignModal = ({
                            client,
                            onClose,
@@ -98,52 +97,46 @@ const UnassignModal = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
-                        <AlertTriangle size={24} className="text-red-600" />
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="text-xl font-bold text-gray-900">Unassign Client?</h3>
-                        <p className="text-gray-600 text-sm">This action will remove the nutritionist assignment</p>
+                <div className="flex items-center justify-between mb-6 border-b pb-4">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center flex-shrink-0">
+                            <AlertTriangle size={24} className="text-red-600" />
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-gray-900">Unassign Client?</h3>
+                            <p className="text-gray-600 text-sm">Remove the current professional assignment</p>
+                        </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                        className="p-2 text-gray-400 hover:text-gray-800 rounded-full hover:bg-gray-100 transition-colors"
                         disabled={isLoading}
                     >
                         <X size={20} />
                     </button>
                 </div>
 
-                <div className="bg-gray-50 rounded-xl p-4 mb-6">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                            <User size={20} className="text-gray-600" />
-                        </div>
-                        <div>
-                            <p className="font-medium text-gray-900">{client.client.full_name}</p>
-                            <p className="text-sm text-gray-600">{client.client.email}</p>
-                        </div>
-                    </div>
-                    <div className="mt-3 text-sm text-gray-600">
-                        <p><span className="font-medium">Currently assigned to:</span> {client.nutritionist.full_name}</p>
-                        <p><span className="font-medium">Assigned:</span> {format(parseISO(client.assigned_at), 'MMM dd, yyyy')}</p>
-                    </div>
+                <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-200">
+                    <p className="font-medium text-gray-900">{client.client.full_name}</p>
+                    <p className="text-sm text-gray-600 mb-2">{client.client.email}</p>
+                    <p className="text-sm">
+                        <span className="font-semibold text-teal-600">Assigned to:</span> {client.nutritionist.full_name}
+                    </p>
                 </div>
 
                 <form onSubmit={handleSubmit}>
                     <div className="mb-6">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Reason for unassigning (optional)
+                            Reason for unassigning (Optional but recommended)
                         </label>
                         <textarea
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
                             rows={3}
-                            placeholder="e.g., Client requested change, nutritionist unavailable, etc."
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                            placeholder="e.g., Client requested change, plan completed, etc."
+                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none transition-shadow"
                         />
                     </div>
 
@@ -152,18 +145,18 @@ const UnassignModal = ({
                             type="button"
                             onClick={onClose}
                             disabled={isLoading}
-                            className="flex-1 py-3 px-6 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50"
+                            className="flex-1 py-3 px-6 bg-gray-200 text-gray-700 font-bold rounded-full hover:bg-gray-300 transition-colors disabled:opacity-50"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="flex-1 py-3 px-6 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            className="flex-1 py-3 px-6 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
                         >
                             {isLoading ? (
                                 <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    <Loader2 size={16} className="animate-spin" />
                                     Unassigning...
                                 </>
                             ) : (
@@ -179,6 +172,7 @@ const UnassignModal = ({
         </div>
     );
 };
+
 
 export default function AssignNutritionistsPage() {
     const supabase = createClientComponentClient();
@@ -508,18 +502,18 @@ export default function AssignNutritionistsPage() {
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'active':
-                return 'bg-green-100 text-green-800';
+                return 'bg-green-100 text-green-800 border-green-300';
             case 'inactive':
-                return 'bg-gray-100 text-gray-800';
+                return 'bg-gray-100 text-gray-800 border-gray-300';
             default:
-                return 'bg-gray-100 text-gray-800';
+                return 'bg-gray-100 text-gray-800 border-gray-300';
         }
     };
 
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800"></div>
+                <Loader2 className="animate-spin text-teal-600" size={32} />
             </div>
         );
     }
@@ -528,67 +522,67 @@ export default function AssignNutritionistsPage() {
     const inactiveClients = assignedClients.filter(c => c.status === 'inactive').length;
 
     return (
-        <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto px-0 sm:px-4 py-8">
             {/* Header */}
             <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-2">Assign Professionals</h1>
+                <h1 className="text-4xl font-extrabold mb-2 text-gray-900">Professional Assignment Management</h1>
                 <p className="text-gray-600">
-                    Assign nutritionists to clients and manage existing assignments
+                    Oversee new consultations and manage current client-nutritionist pairings.
                 </p>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+            {/* Stats Cards - Updated with better design and Teal/Blue accents */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-lg">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-gray-600 text-sm">Awaiting Assignment</p>
-                            <p className="text-2xl font-bold text-blue-600">{filteredRequests.length}</p>
+                            <p className="text-gray-600 text-sm font-medium">Awaiting Assignment</p>
+                            <p className="text-3xl font-bold text-blue-600 mt-1">{filteredRequests.length}</p>
                         </div>
-                        <UserPlus className="text-blue-500" size={32} />
+                        <UserPlus className="text-blue-500 bg-blue-50 p-2 rounded-lg" size={40} />
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-lg">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-gray-600 text-sm">Active Assignments</p>
-                            <p className="text-2xl font-bold text-green-600">{activeClients}</p>
+                            <p className="text-gray-600 text-sm font-medium">Active Assignments</p>
+                            <p className="text-3xl font-bold text-teal-600 mt-1">{activeClients}</p>
                         </div>
-                        <CheckCircle className="text-green-500" size={32} />
+                        <CheckCircle className="text-teal-500 bg-teal-50 p-2 rounded-lg" size={40} />
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-lg">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-gray-600 text-sm">Total Assigned</p>
-                            <p className="text-2xl font-bold text-gray-600">{assignedClients.length}</p>
+                            <p className="text-gray-600 text-sm font-medium">Available Pros</p>
+                            <p className="text-3xl font-bold text-purple-600 mt-1">{professionals.length}</p>
                         </div>
-                        <Users className="text-gray-500" size={32} />
+                        <Users className="text-purple-500 bg-purple-50 p-2 rounded-lg" size={40} />
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-lg">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-gray-600 text-sm">Available Professionals</p>
-                            <p className="text-2xl font-bold text-purple-600">{professionals.length}</p>
+                            <p className="text-gray-600 text-sm font-medium">Total Assignments</p>
+                            <p className="text-3xl font-bold text-gray-800 mt-1">{assignedClients.length}</p>
                         </div>
-                        <Users className="text-purple-500" size={32} />
+                        <Users className="text-gray-500 bg-gray-100 p-2 rounded-lg" size={40} />
                     </div>
                 </div>
             </div>
 
-            {/* Tab Navigation */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-8">
+            {/* Tab Navigation - Sharper, cleaner tab styles */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-lg mb-8">
                 <div className="flex border-b border-gray-200">
                     <button
                         onClick={() => setActiveTab('assign')}
-                        className={`flex-1 py-4 px-6 font-semibold text-center transition-colors ${
+                        className={`flex-1 py-4 px-6 font-bold text-center transition-all duration-300 ${
                             activeTab === 'assign'
-                                ? 'border-b-2 border-blue-600 text-blue-600 bg-blue-50'
-                                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                                ? 'border-b-4 border-teal-600 text-teal-700 bg-teal-50'
+                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-b-4 border-transparent'
                         }`}
                     >
                         <UserPlus size={20} className="inline mr-2" />
@@ -596,19 +590,19 @@ export default function AssignNutritionistsPage() {
                     </button>
                     <button
                         onClick={() => setActiveTab('assigned')}
-                        className={`flex-1 py-4 px-6 font-semibold text-center transition-colors ${
+                        className={`flex-1 py-4 px-6 font-bold text-center transition-all duration-300 ${
                             activeTab === 'assigned'
-                                ? 'border-b-2 border-blue-600 text-blue-600 bg-blue-50'
-                                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                                ? 'border-b-4 border-teal-600 text-teal-700 bg-teal-50'
+                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-b-4 border-transparent'
                         }`}
                     >
                         <Users size={20} className="inline mr-2" />
-                        Assigned Clients ({assignedClients.length})
+                        Manage Assignments ({assignedClients.length})
                     </button>
                 </div>
 
                 {/* Tab Content */}
-                <div className="p-6">
+                <div className="p-4 sm:p-6">
                     {activeTab === 'assign' ? (
                         /* Assign New Clients Section */
                         <div className="space-y-6">
@@ -618,25 +612,25 @@ export default function AssignNutritionistsPage() {
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                                     <input
                                         type="text"
-                                        placeholder="Search clients..."
+                                        placeholder="Search clients by name, email, or goals..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-full focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
                                     />
                                 </div>
-                                <div className="bg-blue-50 px-3 py-2 rounded-lg">
-                                    <span className="font-medium text-blue-900">
+                                <div className="bg-teal-100 px-4 py-2 rounded-full hidden sm:block">
+                                    <span className="font-semibold text-teal-800">
                                         {filteredRequests.length} clients available
                                     </span>
                                 </div>
                             </div>
 
                             {filteredRequests.length === 0 ? (
-                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-                                    <CheckCircle size={48} className="mx-auto text-green-500 mb-4" />
+                                <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center shadow-inner">
+                                    <CheckCircle size={48} className="mx-auto text-teal-500 mb-4" />
                                     <h2 className="text-xl font-semibold mb-2">No Clients Available for Assignment</h2>
                                     <p className="text-gray-600">
-                                        All consultation requests have been assigned or filtered out.
+                                        All completed consultation requests have been assigned to a professional.
                                     </p>
                                 </div>
                             ) : (
@@ -648,15 +642,16 @@ export default function AssignNutritionistsPage() {
                                         );
 
                                         return (
-                                            <div key={request.id} className="bg-gray-50 rounded-lg border p-6">
+                                            <div key={request.id} className="bg-white rounded-xl border border-gray-200 p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
                                                 <div className="flex items-start justify-between">
                                                     <div className="flex-1">
-                                                        <div className="flex items-center gap-3 mb-4">
-                                                            <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
-                                                                <User size={24} className="text-white" />
+                                                        {/* Client Name/Email */}
+                                                        <div className="flex items-center gap-3 mb-4 border-b pb-3">
+                                                            <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center flex-shrink-0">
+                                                                <User size={20} className="text-white" />
                                                             </div>
                                                             <div>
-                                                                <h3 className="text-xl font-semibold text-gray-800">
+                                                                <h3 className="text-xl font-bold text-gray-900">
                                                                     {request.client_name}
                                                                 </h3>
                                                                 <p className="text-sm text-gray-600">
@@ -665,33 +660,36 @@ export default function AssignNutritionistsPage() {
                                                             </div>
                                                         </div>
 
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                            <div className="bg-blue-50 rounded-xl p-4">
-                                                                <h4 className="font-semibold text-blue-900 mb-2">🎯 Health Goals</h4>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                                                            <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                                                                <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-1">
+                                                                    <TrendingUp size={16} /> 🎯 Goals
+                                                                </h4>
                                                                 <p className="text-sm text-blue-800">{request.health_goals}</p>
                                                             </div>
-                                                            <div className="bg-orange-50 rounded-xl p-4">
-                                                                <h4 className="font-semibold text-orange-900 mb-2">⚠️ Current Challenges</h4>
+                                                            <div className="bg-orange-50 rounded-xl p-4 border border-orange-200">
+                                                                <h4 className="font-semibold text-orange-900 mb-2 flex items-center gap-1">
+                                                                    <AlertCircle size={16} /> ⚠️ Challenges
+                                                                </h4>
                                                                 <p className="text-sm text-orange-800">{request.current_challenges}</p>
                                                             </div>
                                                         </div>
 
+                                                        {/* Recommended Professional Card */}
                                                         {recommendedProfessional && (
-                                                            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+                                                            <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-5">
                                                                 <div className="flex items-center gap-2 mb-2">
-                                                                    <Users size={18} className="text-green-600" />
-                                                                    <span className="font-semibold text-green-900">
-                                                                        Recommended: {recommendedProfessional.full_name}
+                                                                    <Users size={18} className="text-teal-600" />
+                                                                    <span className="font-semibold text-teal-800">
+                                                                        Recommended Professional
                                                                     </span>
                                                                 </div>
-                                                                <p className="text-sm text-green-800 mb-1">
-                                                                    📧 {recommendedProfessional.email}
-                                                                </p>
-                                                                <p className="text-sm text-green-800">
-                                                                    🏆 {recommendedProfessional.specializations.length > 0
-                                                                    ? `Specializes in: ${recommendedProfessional.specializations.join(', ')}`
-                                                                    : 'General consultation specialist'
-                                                                }
+                                                                <p className="text-sm text-teal-900 font-medium">{recommendedProfessional.full_name}</p>
+                                                                <p className="text-xs text-teal-700">
+                                                                    {recommendedProfessional.specializations.length > 0
+                                                                        ? `Specializes in: ${recommendedProfessional.specializations.join(', ')}`
+                                                                        : 'General consultation specialist'
+                                                                    }
                                                                 </p>
                                                             </div>
                                                         )}
@@ -703,9 +701,9 @@ export default function AssignNutritionistsPage() {
                                                                 setShowAssignModal(true);
                                                             }}
                                                             disabled={professionals.length === 0}
-                                                            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center gap-2 font-medium"
+                                                            className="bg-teal-600 text-white px-6 py-3 rounded-full hover:bg-teal-700 disabled:bg-gray-400 flex items-center gap-2 font-semibold transition-colors shadow-lg"
                                                         >
-                                                            <Users size={18} />
+                                                            <UserPlus size={18} />
                                                             Assign Professional
                                                         </button>
                                                     </div>
@@ -717,7 +715,7 @@ export default function AssignNutritionistsPage() {
                             )}
                         </div>
                     ) : (
-                        /* Assigned Clients Section */
+                        /* Assigned Clients Section - Cleaned up significantly */
                         <div className="space-y-6">
                             {/* Filters and Search */}
                             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
@@ -728,7 +726,7 @@ export default function AssignNutritionistsPage() {
                                         placeholder="Search assigned clients..."
                                         value={assignedSearchTerm}
                                         onChange={(e) => setAssignedSearchTerm(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-full focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
                                     />
                                 </div>
 
@@ -737,17 +735,17 @@ export default function AssignNutritionistsPage() {
                                     <select
                                         value={filterStatus}
                                         onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
-                                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        className="px-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-800 bg-white"
                                     >
-                                        <option value="all">All Status</option>
                                         <option value="active">Active Only</option>
                                         <option value="inactive">Inactive Only</option>
+                                        <option value="all">All Status</option>
                                     </select>
                                 </div>
                             </div>
 
                             {filteredAssignedClients.length === 0 ? (
-                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                                <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center shadow-inner">
                                     <Users size={48} className="mx-auto text-gray-400 mb-4" />
                                     <h2 className="text-xl font-semibold mb-2">
                                         {assignedClients.length === 0 ? 'No Assignments Yet' : 'No Clients Found'}
@@ -762,100 +760,85 @@ export default function AssignNutritionistsPage() {
                             ) : (
                                 <div className="space-y-4">
                                     {filteredAssignedClients.map((client) => (
-                                        <div key={client.id} className="bg-gray-50 rounded-lg border p-6">
+                                        <div key={client.id} className="bg-white rounded-xl border border-gray-200 p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
                                             <div className="flex items-start justify-between">
                                                 <div className="flex-1">
                                                     {/* Client Info */}
                                                     <div className="flex items-center gap-4 mb-4">
-                                                        <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                                                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
                                                             <User size={24} className="text-gray-600" />
                                                         </div>
                                                         <div className="flex-1">
                                                             <div className="flex items-center gap-3 mb-1">
-                                                                <h3 className="text-xl font-semibold text-gray-800">
+                                                                <h3 className="text-xl font-bold text-gray-900">
                                                                     {client.client.full_name}
                                                                 </h3>
-                                                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(client.status)}`}>
-                                                                    {client.status}
+                                                                <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(client.status)}`}>
+                                                                    {client.status.toUpperCase()}
                                                                 </span>
                                                             </div>
                                                             <p className="text-gray-600">{client.client.email}</p>
                                                         </div>
                                                     </div>
 
-                                                    {/* Assignment Details */}
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                                                        <div className="bg-blue-50 rounded-lg p-3">
-                                                            <p className="text-xs font-medium text-blue-700 mb-1">Assigned To</p>
-                                                            <p className="text-sm font-semibold text-blue-900">{client.nutritionist.full_name}</p>
+                                                    {/* Assignment Details Grid - Cleaned up */}
+                                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+                                                        <div className="bg-teal-50 rounded-lg p-3">
+                                                            <p className="text-xs font-semibold text-teal-700 uppercase mb-1">Professional</p>
+                                                            <p className="text-sm font-bold text-teal-900">{client.nutritionist.full_name}</p>
                                                         </div>
 
-                                                        <div className="bg-gray-100 rounded-lg p-3">
-                                                            <p className="text-xs font-medium text-gray-700 mb-1">Sessions</p>
-                                                            <p className="text-sm font-semibold text-gray-900">
-                                                                {client.sessions_count || 0} completed
-                                                            </p>
-                                                        </div>
-
-                                                        <div className="bg-purple-50 rounded-lg p-3">
-                                                            <p className="text-xs font-medium text-purple-700 mb-1">Assigned</p>
-                                                            <p className="text-sm font-semibold text-purple-900">
+                                                        <div className="bg-gray-50 rounded-lg p-3">
+                                                            <p className="text-xs font-semibold text-gray-700 uppercase mb-1">Assigned</p>
+                                                            <p className="text-sm font-bold text-gray-900">
                                                                 {format(parseISO(client.assigned_at), 'MMM dd, yyyy')}
                                                             </p>
                                                         </div>
+
+                                                        <div className="bg-gray-50 rounded-lg p-3">
+                                                            <p className="text-xs font-semibold text-gray-700 uppercase mb-1">Sessions</p>
+                                                            <p className="text-sm font-bold text-gray-900">
+                                                                {client.sessions_count || 0}
+                                                            </p>
+                                                        </div>
+
+                                                        {client.next_appointment && (
+                                                            <div className="bg-blue-50 rounded-lg p-3">
+                                                                <p className="text-xs font-semibold text-blue-700 uppercase mb-1">Next Session</p>
+                                                                <p className="text-sm font-bold text-blue-900">
+                                                                    {format(parseISO(client.next_appointment.start_time), 'MMM dd, h:mm a')}
+                                                                </p>
+                                                            </div>
+                                                        )}
                                                     </div>
 
                                                     {/* Action Buttons */}
                                                     <div className="flex flex-wrap gap-3">
                                                         <Link
                                                             href={`/dashboard/messages?to=${client.client.id}`}
-                                                            className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+                                                            className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-full hover:bg-gray-200 transition-colors font-medium"
                                                         >
                                                             <MessageSquare size={16} />
                                                             Message
                                                         </Link>
 
-                                                        <Link
-                                                            href={`/dashboard/my-clients/${client.client_id}/plans`}
-                                                            className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
-                                                        >
-                                                            <FileText size={16} />
-                                                            Plans
-                                                        </Link>
+                                                        {client.status === 'active' && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedAssignedClient(client);
+                                                                    setShowUnassignModal(true);
+                                                                }}
+                                                                className="inline-flex items-center gap-2 bg-red-50 text-red-700 px-4 py-2 rounded-full hover:bg-red-100 transition-colors font-medium border border-red-200"
+                                                            >
+                                                                <UserMinus size={16} />
+                                                                Unassign
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
 
-                                                {/* Dropdown Menu */}
-                                                <div className="relative ml-4">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setDropdownOpen(dropdownOpen === client.id ? null : client.id);
-                                                        }}
-                                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                                    >
-                                                        <MoreVertical size={20} />
-                                                    </button>
-
-                                                    {dropdownOpen === client.id && (
-                                                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                                                            {client.status === 'active' && (
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setSelectedAssignedClient(client);
-                                                                        setShowUnassignModal(true);
-                                                                        setDropdownOpen(null);
-                                                                    }}
-                                                                    className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg"
-                                                                >
-                                                                    <UserMinus size={16} />
-                                                                    Unassign Client
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                {/* Dropdown Menu - Simple More button removed, main actions pulled out */}
                                             </div>
                                         </div>
                                     ))}
@@ -866,45 +849,50 @@ export default function AssignNutritionistsPage() {
                 </div>
             </div>
 
-            {/* Assignment Modal (existing) */}
+            {/* Assignment Modal (Redesigned) */}
             {showAssignModal && selectedClient && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-                        <h2 className="text-2xl font-bold mb-6">
-                            Assign Professional to {selectedClient.client_name}
+                        <h2 className="text-3xl font-extrabold mb-6 text-gray-900">
+                            Assign Professional to <span className="text-teal-600">{selectedClient.client_name}</span>
                         </h2>
 
                         <div className="space-y-6">
                             {/* Client Summary */}
                             <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-                                <h3 className="font-semibold mb-3 text-gray-800">Client Summary</h3>
-                                <div className="text-sm text-gray-600 space-y-2">
-                                    <p><strong>🎯 Goals:</strong> {selectedClient.health_goals}</p>
-                                    <p><strong>⚠️ Challenges:</strong> {selectedClient.current_challenges}</p>
-                                    <p><strong>📧 Email:</strong> {selectedClient.client_email}</p>
+                                <h3 className="font-bold mb-3 text-gray-800 flex items-center gap-2"><User size={18} className="text-teal-600" /> Client Profile</h3>
+                                <div className="text-sm text-gray-700 grid grid-cols-2 gap-y-2">
+                                    <p><span className="font-semibold text-blue-700">Goals:</span> {selectedClient.health_goals}</p>
+                                    <p><span className="font-semibold text-orange-700">Challenges:</span> {selectedClient.current_challenges}</p>
+                                    <p className="col-span-2"><span className="font-semibold">Email:</span> {selectedClient.client_email}</p>
                                 </div>
                             </div>
 
                             {/* Professional Selection */}
                             <div>
-                                <label className="block font-semibold mb-4 text-gray-800">Select Professional</label>
-                                <div className="space-y-3 max-h-60 overflow-y-auto">
+                                <label className="block font-bold mb-3 text-gray-800">Select Professional</label>
+                                <div className="space-y-3 max-h-72 overflow-y-auto pr-2 border-y py-3">
                                     {professionals.map(professional => (
-                                        <label key={professional.profile_id} className="flex items-start gap-4 p-4 border-2 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors duration-200 hover:border-blue-200">
+                                        <label key={professional.profile_id} className={`flex items-start gap-4 p-4 border-2 rounded-xl cursor-pointer transition-colors duration-200 ${selectedProfessional === professional.profile_id ? 'border-teal-500 bg-teal-50 shadow-md' : 'border-gray-200 hover:border-teal-300 bg-white'}`}>
                                             <input
                                                 type="radio"
                                                 name="professional"
                                                 value={professional.profile_id}
                                                 checked={selectedProfessional === professional.profile_id}
                                                 onChange={(e) => setSelectedProfessional(e.target.value)}
-                                                className="mt-2 w-4 h-4 text-blue-600"
+                                                className="mt-2 w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
                                             />
                                             <div className="flex-1">
-                                                <h4 className="font-semibold text-gray-800">{professional.full_name}</h4>
-                                                <p className="text-sm text-gray-600">{professional.email}</p>
+                                                <h4 className="font-bold text-gray-900 flex items-center gap-2">
+                                                    {professional.full_name}
+                                                    <span className="text-xs font-medium text-gray-500 capitalize">({professional.role})</span>
+                                                </h4>
                                                 <p className="text-sm text-gray-600">
+                                                    <span className="font-semibold">Clients:</span> {professional.active_clients_count}
+                                                </p>
+                                                <p className="text-sm text-gray-700">
                                                     {professional.specializations.length > 0
-                                                        ? professional.specializations.join(', ')
+                                                        ? professional.specializations.join(' | ')
                                                         : 'General consultation'
                                                     }
                                                 </p>
@@ -916,24 +904,26 @@ export default function AssignNutritionistsPage() {
 
                             {/* Assignment Reason */}
                             <div>
-                                <label className="block font-semibold mb-3 text-gray-800">Assignment Reason (Optional)</label>
+                                <label className="block font-bold mb-3 text-gray-800">Assignment Reason (Optional)</label>
                                 <textarea
                                     value={assignmentReason}
                                     onChange={(e) => setAssignmentReason(e.target.value)}
                                     rows={3}
-                                    placeholder="Why is this professional a good fit for this client?"
-                                    className="w-full p-4 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
+                                    placeholder="e.g., Why is this professional a good fit? (Based on their specialization in Weight Loss)"
+                                    className="w-full p-4 border-2 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors duration-200 bg-gray-50 resize-none"
                                 />
                             </div>
                         </div>
 
+                        {/* Action Buttons */}
                         <div className="flex gap-4 mt-8">
                             <button
                                 onClick={handleAssignProfessional}
                                 disabled={!selectedProfessional || isAssigning}
-                                className="flex-1 bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+                                className="flex-1 bg-teal-600 text-white font-bold py-4 rounded-full hover:bg-teal-700 disabled:bg-gray-400 transition-colors shadow-lg flex items-center justify-center gap-2"
                             >
-                                {isAssigning ? '🔄 Assigning...' : '✅ Assign Professional'}
+                                {isAssigning ? <Loader2 size={20} className="animate-spin" /> : <UserPlus size={20} />}
+                                {isAssigning ? 'Assigning...' : 'Assign Professional'}
                             </button>
                             <button
                                 onClick={() => {
@@ -942,7 +932,7 @@ export default function AssignNutritionistsPage() {
                                     setSelectedProfessional('');
                                     setAssignmentReason('');
                                 }}
-                                className="flex-1 bg-gray-200 text-gray-800 font-bold py-4 rounded-xl hover:bg-gray-300 transition-colors"
+                                className="flex-1 bg-gray-200 text-gray-800 font-bold py-4 rounded-full hover:bg-gray-300 transition-colors"
                             >
                                 Cancel
                             </button>
