@@ -9,8 +9,6 @@ export async function POST(req: NextRequest) {
 
     // FIX: Await cookies() for Next.js 15 compatibility
     const cookieStore = await cookies();
-
-    // FIX: Pass the awaited cookie store
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any });
 
     try {
@@ -32,10 +30,10 @@ export async function POST(req: NextRequest) {
 
         if (profileError || !professionalProfile?.google_refresh_token) {
             console.error('Professional profile error:', profileError);
-            throw new Error('Could not find Google credentials for this professional. Please connect your Google Calendar in settings.');
+            throw new Error('Could not find Google credentials for this professional.');
         }
 
-        // 2. Get client name (simplified - just use the email username if needed)
+        // 2. Get client name
         const clientName = clientEmail.split('@')[0];
 
         // 3. Configure OAuth2 client
@@ -51,21 +49,19 @@ export async function POST(req: NextRequest) {
 
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         const requestId = `Nutrishiksha-${appointmentId}-${Date.now()}`;
-
-        // 4. Format professional role
         const roleTitle = professionalProfile.role === 'nutritionist' ? 'Nutritionist' : 'Trainer';
 
         // 5. Create the calendar event
         const eventData = {
             summary: `Consultation: ${roleTitle} ${professionalProfile.full_name} & ${clientName}`,
-            description: `${roleTitle === 'Nutritionist' ? 'Nutrition' : 'Training'} consultation session.\n\nProfessional: ${professionalProfile.full_name} (${roleTitle})\nClient: ${clientEmail}\n\nBooked via Nutrishiksha platform.`,
+            description: `${roleTitle} consultation session.\n\nProfessional: ${professionalProfile.full_name}\nClient: ${clientEmail}\n\nBooked via Nutrishiksha platform.`,
             start: {
                 dateTime: startTime,
-                timeZone: 'UTC'
+                timeZone: 'Asia/Kolkata' // FIX: Force IST timezone on Google Calendar
             },
             end: {
                 dateTime: endTime,
-                timeZone: 'UTC'
+                timeZone: 'Asia/Kolkata' // FIX: Force IST timezone on Google Calendar
             },
             attendees: [{ email: clientEmail }],
             conferenceData: {
@@ -115,19 +111,6 @@ export async function POST(req: NextRequest) {
         if (!meetingLink) {
             throw new Error('Failed to retrieve the Google Meet link.');
         }
-
-        // 6. Update appointment in database
-        const { error: updateError } = await supabase
-            .from('appointments')
-            .update({
-                meeting_link: meetingLink,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', appointmentId);
-
-        if (updateError) throw updateError;
-
-        console.log('Successfully created meeting link:', meetingLink);
 
         return NextResponse.json({
             meetingLink,
