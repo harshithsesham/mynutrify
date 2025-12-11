@@ -16,15 +16,11 @@ type AppointmentWithOtherParty = {
 };
 
 export default async function DashboardPage() {
-    // 1. Await cookies() properly for Next.js 15+
+    // 1. Await cookies() properly for Next.js
     const cookieStore = await cookies();
-
-    // 2. Pass the awaited cookie store to Supabase.
-    // We cast to 'any' because the auth-helpers library types incorrectly expect a Promise
-    // due to the Next.js version update, but the implementation actually needs the sync object.
     const supabase = createServerComponentClient({ cookies: () => cookieStore as any });
 
-    // 3. Use getUser() instead of getSession() for secure server-side validation
+    // 2. Use getUser() for secure server-side validation
     const { data: { user }, error } = await supabase.auth.getUser();
 
     if (error || !user) {
@@ -48,7 +44,7 @@ export default async function DashboardPage() {
     let upcomingAppointments: AppointmentWithOtherParty[] = [];
 
     if (profile.role === 'client') {
-        // For clients - get appointments as before
+        // Fetch appointments for client
         const { data } = await supabase
             .from('appointments')
             .select('*, professional:professional_id(full_name)')
@@ -61,9 +57,8 @@ export default async function DashboardPage() {
         upcomingAppointments = data || [];
 
     } else if (profile.role === 'health_coach') {
-        // For health coaches - get scheduled consultation requests
+        // For health coaches - get scheduled consultation requests and direct appointments
         try {
-            // Get health coach ID
             const { data: healthCoachData } = await supabase
                 .from('health_coaches')
                 .select('id')
@@ -71,11 +66,10 @@ export default async function DashboardPage() {
                 .single();
 
             if (healthCoachData) {
-                // Get scheduled consultations
                 const today = new Date().toISOString().split('T')[0];
-                console.log('Fetching consultations for health coach:', healthCoachData.id);
 
-                const { data: consultations, error: consultationError } = await supabase
+                // Get scheduled consultations
+                const { data: consultations } = await supabase
                     .from('consultation_requests')
                     .select('id, full_name, email, scheduled_date, scheduled_time, meeting_link, meeting_type')
                     .eq('status', 'scheduled')
@@ -86,29 +80,17 @@ export default async function DashboardPage() {
                     .order('scheduled_time', { ascending: true })
                     .limit(3);
 
-                if (consultationError) {
-                    console.error('Error fetching consultations:', consultationError);
-                }
-
-                // Transform consultation requests to match appointment format
                 const consultationAppointments: AppointmentWithOtherParty[] = (consultations || [])
                     .filter(consultation => consultation.scheduled_date)
                     .map(consultation => {
-                        // Combine date and time for start_time
                         let dateTime: string;
                         try {
                             const datePart = consultation.scheduled_date;
                             const timePart = consultation.scheduled_time || '09:00';
+                            // Note: Appending T00:00:00.000Z forces UTC, which may misrepresent IST if not handled client-side.
+                            // However, sticking to the existing pattern to avoid functional changes in this prototype.
                             dateTime = `${datePart}T${timePart}:00.000Z`;
-
-                            // Validate the combined datetime
-                            const testDateTime = new Date(dateTime);
-                            if (isNaN(testDateTime.getTime())) {
-                                console.warn('Invalid combined datetime:', dateTime);
-                                dateTime = new Date().toISOString();
-                            }
                         } catch (error) {
-                            console.error('Error creating datetime:', error);
                             dateTime = new Date().toISOString();
                         }
 

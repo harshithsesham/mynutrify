@@ -1,4 +1,4 @@
-// app/dashboard/components/Sidebar.tsx (Updated section for health coach)
+// app/dashboard/components/Sidebar.tsx
 'use client';
 
 import Link from 'next/link';
@@ -7,13 +7,11 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import {
     LayoutDashboard,
     Calendar,
-    Search,
     Settings,
     LogOut,
     Users,
     FileText,
     X,
-    HeartHandshake,
     UserCheck,
     ClipboardList,
     BarChart,
@@ -55,36 +53,39 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
 
         switch (userRole) {
             case 'client':
+                // Client flow simplified and cleaned
                 return [
                     ...baseLinks,
                     { name: 'My Nutritionist', href: '/dashboard/my-nutritionist', icon: UserCheck },
-                    { name: 'My Appointments', href: '/dashboard/my-appointments', icon: Calendar },
                     { name: 'My Plans', href: '/dashboard/my-plans', icon: FileText },
+                    { name: 'My Appointments', href: '/dashboard/my-appointments', icon: Calendar },
                     { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
                     { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings }
                 ];
 
             case 'nutritionist':
+                // Nutritionist flow consolidated and cleaned
                 return [
                     ...baseLinks,
-                    { name: 'Assigned Clients', href: '/dashboard/nutritionist/assigned-clients', icon: Users },
-                    { name: 'My Clients', href: '/dashboard/my-clients', icon: Users },
+                    { name: 'My Clients', href: '/dashboard/nutritionist/assigned-clients', icon: Users },
                     { name: 'Calendar', href: '/dashboard/my-appointments', icon: Calendar },
                     { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
                     { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings }
                 ];
 
             case 'health_coach':
+                // Health Coach flow consolidated and cleaned
                 return [
                     ...baseLinks,
-                    { name: 'Consultation Requests', href: '/dashboard/health-coach/consultation-requests', icon: ClipboardList },
-                    { name: 'Assign Nutritionists', href: '/dashboard/health-coach/assign-nutritionists', icon: UserCheck },
+                    { name: 'Consult Requests', href: '/dashboard/health-coach/consultation-requests', icon: ClipboardList },
+                    { name: 'Assign Professionals', href: '/dashboard/health-coach/assign-nutritionists', icon: UserPlus }, // Changed from UserCheck to UserPlus
                     { name: 'Analytics', href: '/dashboard/health-coach/analytics', icon: BarChart },
                     { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
                     { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings }
                 ];
 
             case 'trainer':
+                // Trainer flow consolidated
                 return [
                     ...baseLinks,
                     { name: 'My Clients', href: '/dashboard/my-clients', icon: Users },
@@ -109,9 +110,11 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
     const SidebarContent = () => (
         <>
             <div className="flex justify-between items-center mb-12">
-                <h1 className="text-3xl font-bold text-gray-800">NutriShiksha</h1>
-                <button onClick={() => setIsOpen(false)} className="md:hidden text-gray-500 hover:text-gray-800">
-                    <X size={28} />
+                <Link href="/" className="text-3xl font-extrabold text-teal-600 tracking-wider">
+                    NutriShiksha
+                </Link>
+                <button onClick={() => setIsOpen(false)} className="md:hidden text-gray-500 hover:text-teal-600 p-2 rounded-full transition-colors">
+                    <X size={24} />
                 </button>
             </div>
             <nav className="flex-grow">
@@ -121,12 +124,15 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
                             ? pathname === link.href
                             : pathname.startsWith(link.href);
                         return (
-                            <li key={link.name} className="mb-3">
+                            <li key={link.name} className="mb-2">
                                 <Link
                                     href={link.href}
                                     onClick={() => setIsOpen(false)}
-                                    className={`flex items-center p-3 rounded-lg transition-colors text-gray-600 font-medium ${
-                                        isActive ? 'bg-gray-800 text-white' : 'hover:bg-gray-100'
+                                    // Redesigned Active/Hover states
+                                    className={`flex items-center p-3 rounded-xl transition-all font-semibold ${
+                                        isActive
+                                            ? 'bg-teal-600 text-white shadow-md'
+                                            : 'text-gray-700 hover:bg-teal-50 hover:text-teal-600'
                                     }`}
                                 >
                                     <link.icon className="mr-4" size={20} />
@@ -137,10 +143,10 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
                     })}
                 </ul>
             </nav>
-            <div className="mt-auto">
+            <div className="mt-auto pt-4 border-t border-gray-100">
                 <button
                     onClick={handleLogout}
-                    className="flex items-center w-full p-3 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                    className="flex items-center w-full p-3 rounded-xl text-red-600 hover:bg-red-50 transition-colors font-medium"
                 >
                     <LogOut className="mr-4" size={20} />
                     <span>Logout</span>
@@ -157,7 +163,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             }`} onClick={() => setIsOpen(false)}></div>
             <aside className={`fixed top-0 left-0 h-full w-64 bg-white border-r border-gray-200 p-6 flex flex-col z-40 transform transition-transform md:translate-x-0 ${
                 isOpen ? 'translate-x-0' : '-translate-x-full'
-            }`}>
+            } shadow-xl`}>
                 <SidebarContent />
             </aside>
 
