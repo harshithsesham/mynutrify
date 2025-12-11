@@ -1,3 +1,4 @@
+// frontend/src/app/dashboard/page.tsx
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -15,11 +16,13 @@ type AppointmentWithOtherParty = {
 };
 
 export default async function DashboardPage() {
-    // 1. Await cookies() properly for Next.js 15/16
+    // 1. Await cookies() properly for Next.js 15+
     const cookieStore = await cookies();
 
-    // 2. Pass the awaited cookie store to the client creator
-    const supabase = createServerComponentClient({ cookies: () => cookieStore });
+    // 2. Pass the awaited cookie store to Supabase.
+    // We cast to 'any' because the auth-helpers library types incorrectly expect a Promise
+    // due to the Next.js version update, but the implementation actually needs the sync object.
+    const supabase = createServerComponentClient({ cookies: () => cookieStore as any });
 
     // 3. Use getUser() instead of getSession() for secure server-side validation
     const { data: { user }, error } = await supabase.auth.getUser();
@@ -31,7 +34,7 @@ export default async function DashboardPage() {
     const { data: profile } = await supabase
         .from('profiles')
         .select('id, role, full_name')
-        .eq('user_id', user.id) // Use user.id from getUser()
+        .eq('user_id', user.id)
         .single();
 
     if (!profile) {
@@ -91,12 +94,14 @@ export default async function DashboardPage() {
                 const consultationAppointments: AppointmentWithOtherParty[] = (consultations || [])
                     .filter(consultation => consultation.scheduled_date)
                     .map(consultation => {
+                        // Combine date and time for start_time
                         let dateTime: string;
                         try {
                             const datePart = consultation.scheduled_date;
                             const timePart = consultation.scheduled_time || '09:00';
                             dateTime = `${datePart}T${timePart}:00.000Z`;
 
+                            // Validate the combined datetime
                             const testDateTime = new Date(dateTime);
                             if (isNaN(testDateTime.getTime())) {
                                 console.warn('Invalid combined datetime:', dateTime);
@@ -131,6 +136,7 @@ export default async function DashboardPage() {
                     id: apt.id
                 }));
 
+                // Combine and sort by start time
                 upcomingAppointments = [...consultationAppointments, ...regularAppointments]
                     .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
                     .slice(0, 3);
