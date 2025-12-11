@@ -1,11 +1,40 @@
-// app/(auth)/login/page.tsx
+// frontend/src/app/(auth)/login/page.tsx
 'use client';
 
 import { useState, Suspense } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LogIn, UserPlus, Mail, AlertCircle, Loader2 } from 'lucide-react';
+import { LogIn, UserPlus, Mail, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+
+// Component for primary action button styling
+const PrimaryButton = ({ isLoginView, loading }: { isLoginView: boolean, loading: boolean }) => (
+    <button
+        type="submit"
+        disabled={loading}
+        className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-full transition duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-teal-500/50"
+    >
+        {loading ? (
+            <div className="flex items-center">
+                <Loader2 className="animate-spin h-5 w-5 mr-2" />
+                Processing...
+            </div>
+        ) : (
+            isLoginView ? (
+                <>
+                    <LogIn className="mr-2" size={20} />
+                    Sign In
+                </>
+            ) : (
+                <>
+                    <UserPlus className="mr-2" size={20} />
+                    Create Account
+                </>
+            )
+        )}
+    </button>
+);
+
 
 // Separate component that uses useSearchParams
 function LoginForm() {
@@ -75,22 +104,23 @@ function LoginForm() {
         setLoading(false);
     };
 
+    // Redesigned Email Confirmation Screen
     if (showEmailSent) {
         return (
             <div className="bg-gray-50 text-gray-800 min-h-screen flex flex-col items-center justify-center font-sans p-4">
                 <div className="w-full max-w-md">
-                    <div className="bg-white p-8 rounded-2xl shadow-md text-center">
-                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <Mail className="w-8 h-8 text-blue-600" />
+                    <div className="bg-white p-10 rounded-2xl shadow-2xl text-center border border-gray-100">
+                        <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                            <Mail className="w-8 h-8 text-teal-600" />
                         </div>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-4">Check Your Email</h2>
+                        <h2 className="text-3xl font-bold text-gray-900 mb-4">Check Your Email</h2>
                         <p className="text-gray-600 mb-6">
-                            We&apos;ve sent a confirmation link to <strong>{email}</strong>.
-                            Please click the link in the email to verify your account and complete your signup.
+                            We&apos;ve sent a confirmation link to <strong className="text-teal-600">{email}</strong>.
+                            Please click the link to verify your account and proceed to role selection.
                         </p>
-                        <div className="space-y-4">
+                        <div className="space-y-4 pt-4 border-t border-gray-100">
                             <p className="text-sm text-gray-500">
-                                Don&apos;t see the email? Check your spam folder or wait a few minutes.
+                                Tip: Check your spam folder if you don&apos;t see it immediately.
                             </p>
                             <button
                                 onClick={() => {
@@ -100,8 +130,9 @@ function LoginForm() {
                                     setPassword('');
                                     setFullName('');
                                 }}
-                                className="text-blue-600 hover:text-blue-700 font-semibold"
+                                className="text-teal-600 hover:text-teal-700 font-semibold inline-flex items-center gap-1 transition-colors"
                             >
+                                <ArrowLeft size={16} />
                                 Back to Login
                             </button>
                         </div>
@@ -111,20 +142,24 @@ function LoginForm() {
         );
     }
 
+    // Redesigned Login/Signup Form
     return (
         <div className="bg-gray-50 text-gray-800 min-h-screen flex flex-col items-center justify-center font-sans p-4">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
-                    <Link href="/" className="text-3xl font-bold text-gray-800">Nutrishiksha</Link>
-                    <p className="text-gray-600 mt-2">
-                        {isLoginView ? 'Welcome back! Sign in to continue.' : 'Create an account to get started.'}
+                    <Link href="/" className="text-4xl font-extrabold text-teal-600 tracking-wider">Nutrishiksha</Link>
+                    <h1 className="text-2xl font-bold text-gray-900 mt-4">
+                        {isLoginView ? 'Sign In to Your Dashboard' : 'Create Your Account'}
+                    </h1>
+                    <p className="text-gray-600 mt-1">
+                        {isLoginView ? 'Welcome back! Get started again.' : 'Join the platform and start your journey.'}
                     </p>
                 </div>
-                <div className="bg-white p-8 rounded-2xl shadow-md">
+                <div className="bg-white p-8 rounded-2xl shadow-2xl border border-gray-100">
                     <form onSubmit={handleAuthAction}>
                         {!isLoginView && (
                             <div className="mb-4">
-                                <label className="block text-gray-600 font-medium mb-2" htmlFor="fullName">
+                                <label className="block text-gray-700 font-medium mb-2" htmlFor="fullName">
                                     Full Name
                                 </label>
                                 <input
@@ -132,13 +167,14 @@ function LoginForm() {
                                     id="fullName"
                                     value={fullName}
                                     onChange={(e) => setFullName(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent"
+                                    placeholder="Your full name"
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
                                     required
                                 />
                             </div>
                         )}
                         <div className="mb-4">
-                            <label className="block text-gray-600 font-medium mb-2" htmlFor="email">
+                            <label className="block text-gray-700 font-medium mb-2" htmlFor="email">
                                 Email
                             </label>
                             <input
@@ -146,12 +182,13 @@ function LoginForm() {
                                 id="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent"
+                                placeholder="name@example.com"
+                                className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
                                 required
                             />
                         </div>
                         <div className="mb-6">
-                            <label className="block text-gray-600 font-medium mb-2" htmlFor="password">
+                            <label className="block text-gray-700 font-medium mb-2" htmlFor="password">
                                 Password
                             </label>
                             <input
@@ -159,46 +196,22 @@ function LoginForm() {
                                 id="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent"
+                                placeholder={isLoginView ? "Enter your password" : "Min 6 characters"}
+                                className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
                                 required
                                 minLength={6}
                             />
-                            {!isLoginView && (
-                                <p className="text-sm text-gray-500 mt-1">Password must be at least 6 characters</p>
-                            )}
                         </div>
                         {error && (
-                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-                                <AlertCircle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
-                                <p className="text-red-600 text-sm">{error}</p>
+                            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 shadow-sm">
+                                <AlertCircle size={20} className="text-red-600 mt-0.5 flex-shrink-0" />
+                                <p className="text-red-700 text-sm font-medium">{error}</p>
                             </div>
                         )}
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:bg-gray-500 flex items-center justify-center"
-                        >
-                            {loading ? (
-                                <div className="flex items-center">
-                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                                    Processing...
-                                </div>
-                            ) : (
-                                isLoginView ? (
-                                    <>
-                                        <LogIn className="mr-2" size={20} />
-                                        Sign In
-                                    </>
-                                ) : (
-                                    <>
-                                        <UserPlus className="mr-2" size={20} />
-                                        Create Account
-                                    </>
-                                )
-                            )}
-                        </button>
+                        <PrimaryButton isLoginView={isLoginView} loading={loading} />
                     </form>
-                    <p className="text-center text-gray-600 mt-6">
+
+                    <p className="text-center text-gray-600 mt-6 pt-4 border-t border-gray-100">
                         {isLoginView ? "Don&apos;t have an account?" : "Already have an account?"}
                         <button
                             onClick={() => {
@@ -208,7 +221,7 @@ function LoginForm() {
                                 setPassword('');
                                 setFullName('');
                             }}
-                            className="text-gray-800 hover:underline font-semibold ml-2 focus:outline-none"
+                            className="text-teal-600 hover:text-teal-700 font-bold ml-2 focus:outline-none transition-colors"
                         >
                             {isLoginView ? 'Sign Up' : 'Sign In'}
                         </button>
@@ -225,20 +238,15 @@ function LoginPageSkeleton() {
         <div className="bg-gray-50 text-gray-800 min-h-screen flex flex-col items-center justify-center font-sans p-4">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
-                    <div className="text-3xl font-bold text-gray-800">Nutrishiksha</div>
-                    <div className="h-4 bg-gray-200 rounded mt-2 animate-pulse"></div>
+                    <div className="text-4xl font-bold text-teal-600">Nutrishiksha</div>
+                    <div className="h-6 w-48 bg-gray-200 rounded-full mt-3 mx-auto animate-pulse"></div>
                 </div>
-                <div className="bg-white p-8 rounded-2xl shadow-md">
-                    <div className="space-y-4">
-                        <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-                        <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
-                        <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-                        <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
-                        <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
-                    </div>
-                    <div className="flex items-center justify-center mt-6">
-                        <Loader2 className="animate-spin h-6 w-6 text-gray-600" />
-                        <span className="ml-2 text-gray-600">Loading...</span>
+                <div className="bg-white p-8 rounded-2xl shadow-2xl">
+                    <div className="space-y-6">
+                        <div className="h-12 bg-gray-200 rounded-xl animate-pulse"></div>
+                        <div className="h-12 bg-gray-200 rounded-xl animate-pulse"></div>
+                        <div className="h-12 bg-gray-200 rounded-xl animate-pulse"></div>
+                        <div className="h-12 bg-teal-200 rounded-full animate-pulse"></div>
                     </div>
                 </div>
             </div>

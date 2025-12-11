@@ -31,6 +31,7 @@ export default function RoleSelectionPage() {
                     .single();
 
                 if (profile?.role) {
+                    // Redirect to dashboard if role is already set
                     router.push('/dashboard');
                     return;
                 }
@@ -122,7 +123,7 @@ export default function RoleSelectionPage() {
         return (
             <div className="bg-gray-50 text-gray-800 min-h-screen flex items-center justify-center">
                 <div className="text-center">
-                    <Loader2 className="animate-spin h-8 w-8 text-gray-600 mx-auto mb-4" />
+                    <Loader2 className="animate-spin h-8 w-8 text-teal-600 mx-auto mb-4" />
                     <p className="text-gray-600">Checking authentication...</p>
                 </div>
             </div>
@@ -133,64 +134,69 @@ export default function RoleSelectionPage() {
         return null;
     }
 
+    // Define roles with consistent Tailwind classes for the new theme
     const roles = [
         {
             name: 'Client',
             value: 'client',
             icon: <Users size={32} />,
             description: "Track your nutrition journey and connect with experts.",
-            color: "hover:border-gray-400 hover:bg-gray-50"
+            accent: "text-blue-600 bg-blue-50"
         },
         {
             name: 'Nutritionist',
             value: 'nutritionist',
             icon: <Apple size={32} />,
             description: "Manage your clients and create personalized nutrition plans.",
-            color: "hover:border-gray-400 hover:bg-gray-50"
+            accent: "text-teal-600 bg-teal-50"
         },
         {
             name: 'Health Coach',
             value: 'health_coach',
             icon: <HeartHandshake size={32} />,
             description: "Conduct consultations and match clients with nutritionists.",
-            color: "hover:border-gray-400 hover:bg-gray-50"
+            accent: "text-purple-600 bg-purple-50"
         },
         {
             name: 'Trainer',
             value: 'trainer',
             icon: <Dumbbell size={32} />,
             description: "Oversee workouts and client fitness.",
-            color: "hover:border-gray-400 hover:bg-gray-50"
+            accent: "text-green-600 bg-green-50"
         },
     ];
 
     return (
         <div className="bg-gray-50 text-gray-800 min-h-screen flex items-center justify-center font-sans p-4">
             <div className="text-center max-w-5xl w-full">
-                <h1 className="text-5xl font-bold mb-4">Welcome to NutriShiksha!</h1>
+                <h1 className="text-5xl font-extrabold mb-4 text-gray-900">
+                    <span className="text-teal-600">Welcome</span> to NutriShiksha!
+                </h1>
                 <p className="text-xl text-gray-600 mb-12">How will you be using our platform?</p>
 
                 {error && (
-                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 max-w-md mx-auto">
-                        <AlertCircle size={16} className="text-red-500 flex-shrink-0" />
-                        <p className="text-red-600 text-sm">{error}</p>
+                    <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 max-w-lg mx-auto shadow-sm">
+                        <AlertCircle size={20} className="text-red-600 flex-shrink-0" />
+                        <p className="text-red-700 text-sm font-medium">{error}</p>
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {roles.map((role) => (
                         <button
                             key={role.value}
                             onClick={() => handleSelectRole(role.value)}
                             disabled={loading}
-                            className={`bg-white p-8 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col items-center justify-center aspect-square disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${role.color}`}
+                            className={`bg-white p-8 rounded-2xl border-2 border-gray-100 shadow-xl hover:shadow-2xl hover:border-teal-400 transition-all duration-300 transform hover:-translate-y-1 cursor-pointer flex flex-col items-center justify-center h-full min-h-64 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none`}
                         >
-                            <div className="text-gray-800 mb-4">{role.icon}</div>
-                            <h2 className="text-2xl font-semibold text-gray-800">{role.name}</h2>
-                            <p className="text-gray-600 mt-2 text-sm">{role.description}</p>
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 shadow-inner ${role.accent}`}>
+                                {role.icon}
+                            </div>
+                            <h2 className="text-2xl font-bold text-gray-900">{role.name}</h2>
+                            <p className="text-gray-600 mt-2 text-sm max-w-[200px]">{role.description}</p>
                             {loading && (
                                 <div className="mt-4">
-                                    <Loader2 className="animate-spin h-5 w-5 text-gray-600" />
+                                    <Loader2 className="animate-spin h-5 w-5 text-teal-600" />
                                 </div>
                             )}
                         </button>
@@ -198,7 +204,7 @@ export default function RoleSelectionPage() {
                 </div>
 
                 <p className="text-sm text-gray-500 mt-8">
-                    Don&apos;t worry, you can change this later in your settings
+                    Note: You can change this later in your profile settings.
                 </p>
             </div>
         </div>
