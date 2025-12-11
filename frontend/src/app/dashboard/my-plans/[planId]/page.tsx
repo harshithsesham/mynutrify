@@ -68,15 +68,28 @@ export default async function PlanDetailPage({ params }: PageProps): Promise<Rea
 
     const [{ data: plan, error: planError }, { data: entries, error: entriesError }] = await Promise.all([planPromise, entriesPromise]);
 
-    if (planError || entriesError) {
-        console.error("Error fetching plan details:", planError || entriesError);
-        return <div className="text-red-600 p-8">Error loading plan details.</div>;
+    // 3. Robust Failure Handling and Authorization Check (CRITICAL FIX)
+    if (planError) {
+        // If there's a database error (e.g., RLS denied access, ID not found), redirect safely.
+        console.error(`Error fetching plan ${planId}:`, planError);
+        return redirect('/dashboard/my-plans');
     }
 
-    // 3. Defensive Authorization Check (Primary Fix)
-    if (!plan || plan.assigned_to_id !== clientProfile.id) {
-        // This handles cases where the RLS rules failed or the ID was guessed.
-        return <div className="text-gray-500 p-8">Plan not found or access denied.</div>;
+    if (!plan) {
+        // If plan was not found (single() returned null), redirect safely.
+        return redirect('/dashboard/my-plans');
+    }
+
+    if (plan.assigned_to_id !== clientProfile.id) {
+        // If the user is not the assigned client, deny access and redirect.
+        console.warn(`Access denied for plan ${planId}. User is not assigned client.`);
+        return redirect('/dashboard/my-plans');
+    }
+
+    if (entriesError) {
+        console.error(`Error fetching entries for plan ${planId}:`, entriesError);
+        // If entries fail to load, treat the whole detail view as unusable for safety.
+        return redirect('/dashboard/my-plans');
     }
 
     // Explicitly cast for type safety when passing to Client Component
