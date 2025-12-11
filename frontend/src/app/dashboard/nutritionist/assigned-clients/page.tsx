@@ -186,7 +186,7 @@ export default function AssignedClientsPage() {
         return (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                 <div className="bg-white rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                    <h2 className="text-2xl font-bold mb-6 text-gray-900">
+                    <h2 className="text-2xl font-bold mb-6 text-black">
                         Schedule Session for {client.client.full_name}
                     </h2>
 
@@ -206,11 +206,11 @@ export default function AssignedClientsPage() {
                     <div className="space-y-6">
                         {/* Session Type */}
                         <div>
-                            <label className="block font-medium mb-2 text-gray-900">Session Type</label>
+                            <label className="block font-medium mb-2 text-black">Session Type</label>
                             <select
                                 value={sessionType}
                                 onChange={(e) => setSessionType(e.target.value)}
-                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-black"
                             >
                                 <option value="initial">Initial Assessment</option>
                                 <option value="follow-up">Follow-up Session</option>
@@ -225,13 +225,13 @@ export default function AssignedClientsPage() {
 
                         {/* Date Selection */}
                         <div>
-                            <label className="block font-medium mb-2 text-gray-900">Select Date</label>
+                            <label className="block font-medium mb-2 text-black">Select Date</label>
                             <input
                                 type="date"
                                 value={selectedDate}
                                 min={new Date().toISOString().split('T')[0]}
                                 onChange={(e) => setSelectedDate(e.target.value)}
-                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-black"
                             />
                             <p className="text-xs text-gray-500 mt-1">
                                 You can schedule for any future date
@@ -240,11 +240,11 @@ export default function AssignedClientsPage() {
 
                         {/* Time Selection */}
                         <div>
-                            <label className="block font-medium mb-2 text-gray-900">Select Time</label>
+                            <label className="block font-medium mb-2 text-black">Select Time</label>
                             <select
                                 value={selectedTime}
                                 onChange={(e) => setSelectedTime(e.target.value)}
-                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-black"
                             >
                                 <option value="">Choose time...</option>
                                 {generateTimeSlots().map(slot => {
@@ -267,11 +267,11 @@ export default function AssignedClientsPage() {
 
                         {/* Duration */}
                         <div>
-                            <label className="block font-medium mb-2 text-gray-900">Duration</label>
+                            <label className="block font-medium mb-2 text-black">Duration</label>
                             <select
                                 value={duration}
                                 onChange={(e) => setDuration(e.target.value)}
-                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-black"
                             >
                                 <option value="15">15 minutes</option>
                                 <option value="30">30 minutes</option>
@@ -284,7 +284,7 @@ export default function AssignedClientsPage() {
 
                         {/* Session Notes */}
                         <div>
-                            <label className="block font-medium mb-2 text-gray-900">
+                            <label className="block font-medium mb-2 text-black">
                                 Session Agenda/Notes for Client
                             </label>
                             <textarea
@@ -292,14 +292,14 @@ export default function AssignedClientsPage() {
                                 onChange={(e) => setSessionNotes(e.target.value)}
                                 rows={4}
                                 placeholder="What will be covered in this session...&#10;- Review current progress&#10;- Adjust meal plan&#10;- Discuss challenges&#10;- Set new goals"
-                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-black"
                             />
                         </div>
 
                         {/* Client History Summary */}
                         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                            <h4 className="font-bold mb-2 text-gray-900">Client Summary</h4>
-                            <div className="text-sm text-gray-800 space-y-1">
+                            <h4 className="font-bold mb-2 text-black">Client Summary</h4>
+                            <div className="text-sm text-black space-y-1">
                                 <p><strong>Sessions Completed:</strong> {client.sessions_count}</p>
                                 {client.last_session_date && (
                                     <p><strong>Last Session:</strong> {format(parseISO(client.last_session_date), 'MMM dd, yyyy')}</p>
@@ -341,7 +341,7 @@ export default function AssignedClientsPage() {
     return (
         <div className="max-w-6xl mx-auto px-4 py-8">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-2">My Assigned Clients</h1>
+                <h1 className="text-3xl font-bold mb-2 text-black">My Assigned Clients</h1>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-blue-800 text-sm">
                         🇮🇳 <strong>Nutritionist Scheduling:</strong> You can schedule sessions with your clients at any time.
@@ -353,7 +353,7 @@ export default function AssignedClientsPage() {
             {clients.length === 0 ? (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
                     <User size={48} className="mx-auto text-gray-400 mb-4" />
-                    <h2 className="text-xl font-semibold mb-2">No Assigned Clients Yet</h2>
+                    <h2 className="text-xl font-semibold mb-2 text-black">No Assigned Clients Yet</h2>
                     <p className="text-gray-600">
                         You&apos;ll see clients here once they are assigned to you by health coaches.
                     </p>
@@ -369,16 +369,16 @@ export default function AssignedClientsPage() {
                                             <User size={24} className="text-gray-600" />
                                         </div>
                                         <div>
-                                            <h3 className="text-xl font-bold text-gray-900">
+                                            <h3 className="text-xl font-bold text-black">
                                                 {client.client.full_name}
                                             </h3>
-                                            <p className="text-sm text-gray-700 font-medium">
+                                            <p className="text-sm text-black font-medium">
                                                 {client.client.email}
                                             </p>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 mb-4">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-800 mb-4">
                                         <div>
                                             <span className="font-medium">Assigned:</span> {' '}
                                             {format(parseISO(client.assigned_at), 'MMM dd, yyyy')}
@@ -402,7 +402,7 @@ export default function AssignedClientsPage() {
                                     {/* Assignment Reason */}
                                     {client.assignment_reason && (
                                         <div className="bg-gray-50 rounded-lg p-3 mb-4 border border-gray-200">
-                                            <p className="text-sm text-gray-900">
+                                            <p className="text-sm text-black">
                                                 <span className="font-bold">Assignment Note:</span> {client.assignment_reason}
                                             </p>
                                         </div>
