@@ -1,12 +1,40 @@
 // app/(auth)/role-selection/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 import { Users, Apple, Dumbbell, HeartHandshake, Loader2, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
 
-export default function RoleSelectionPage() {
+// --- Shared Components ---
+
+const Header = () => (
+    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm shadow-md">
+        <nav className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <Link href="/" className="text-3xl font-extrabold text-teal-600 tracking-wider">
+                NutriShiksha
+            </Link>
+            <div className="flex items-center space-x-6">
+                <Link href="/" className="text-gray-600 hover:text-teal-600 font-medium transition-colors">
+                    Home
+                </Link>
+            </div>
+        </nav>
+    </header>
+);
+
+const Footer = () => (
+    <footer className="bg-gray-800 text-white mt-auto">
+        <div className="container mx-auto px-6 py-4 text-center text-sm">
+            &copy; {new Date().getFullYear()} NutriShiksha. All rights reserved.
+        </div>
+    </footer>
+);
+
+// --- Role Selection Logic ---
+
+function RoleSelectionContent() {
     const [loading, setLoading] = useState(false);
     const [isAuthorized, setIsAuthorized] = useState(false);
     const [checkingAuth, setCheckingAuth] = useState(true);
@@ -31,7 +59,6 @@ export default function RoleSelectionPage() {
                     .single();
 
                 if (profile?.role) {
-                    // Redirect to dashboard if role is already set
                     router.push('/dashboard');
                     return;
                 }
@@ -121,7 +148,7 @@ export default function RoleSelectionPage() {
 
     if (checkingAuth) {
         return (
-            <div className="bg-gray-50 text-gray-800 min-h-screen flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="animate-spin h-8 w-8 text-teal-600 mx-auto mb-4" />
                     <p className="text-gray-600">Checking authentication...</p>
@@ -134,7 +161,6 @@ export default function RoleSelectionPage() {
         return null;
     }
 
-    // Define roles with consistent Tailwind classes for the new theme
     const roles = [
         {
             name: 'Client',
@@ -167,7 +193,7 @@ export default function RoleSelectionPage() {
     ];
 
     return (
-        <div className="bg-gray-50 text-gray-800 min-h-screen flex items-center justify-center font-sans p-4">
+        <div className="flex-1 flex items-center justify-center font-sans p-4">
             <div className="text-center max-w-5xl w-full">
                 <h1 className="text-5xl font-extrabold mb-4 text-gray-900">
                     <span className="text-teal-600">Welcome</span> to NutriShiksha!
@@ -207,6 +233,22 @@ export default function RoleSelectionPage() {
                     Note: You can change this later in your profile settings.
                 </p>
             </div>
+        </div>
+    );
+}
+
+export default function RoleSelectionPage() {
+    return (
+        <div className="bg-gray-50 min-h-screen flex flex-col">
+            <Header />
+            <Suspense fallback={
+                <div className="flex-1 flex items-center justify-center">
+                    <Loader2 className="animate-spin h-8 w-8 text-teal-600 mx-auto mb-4" />
+                </div>
+            }>
+                <RoleSelectionContent />
+            </Suspense>
+            <Footer />
         </div>
     );
 }

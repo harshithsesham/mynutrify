@@ -7,6 +7,32 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { LogIn, UserPlus, Mail, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
+// --- Shared Components ---
+
+const Header = () => (
+    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm shadow-md">
+        <nav className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <Link href="/" className="text-3xl font-extrabold text-teal-600 tracking-wider">
+                NutriShiksha
+            </Link>
+            <div className="flex items-center space-x-6">
+                <Link href="/" className="text-gray-600 hover:text-teal-600 font-medium transition-colors">
+                    Home
+                </Link>
+                {/* Login/Signup link removed as this page serves that function */}
+            </div>
+        </nav>
+    </header>
+);
+
+const Footer = () => (
+    <footer className="bg-gray-800 text-white mt-auto">
+        <div className="container mx-auto px-6 py-4 text-center text-sm">
+            &copy; {new Date().getFullYear()} NutriShiksha. All rights reserved.
+        </div>
+    </footer>
+);
+
 // Component for primary action button styling
 const PrimaryButton = ({ isLoginView, loading }: { isLoginView: boolean, loading: boolean }) => (
     <button
@@ -53,6 +79,7 @@ function LoginForm() {
     // Check for error in URL params (from auth callback)
     const urlError = searchParams.get('error');
     if (urlError && !error) {
+        // Only set error once from URL to prevent infinite loop
         setError(urlError);
     }
 
@@ -107,7 +134,7 @@ function LoginForm() {
     // Redesigned Email Confirmation Screen
     if (showEmailSent) {
         return (
-            <div className="bg-gray-50 text-gray-800 min-h-screen flex flex-col items-center justify-center font-sans p-4">
+            <div className="bg-gray-50 text-gray-800 flex-1 flex flex-col items-center justify-center font-sans p-4">
                 <div className="w-full max-w-md">
                     <div className="bg-white p-10 rounded-2xl shadow-2xl text-center border border-gray-100">
                         <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
@@ -144,10 +171,9 @@ function LoginForm() {
 
     // Redesigned Login/Signup Form
     return (
-        <div className="bg-gray-50 text-gray-800 min-h-screen flex flex-col items-center justify-center font-sans p-4">
+        <div className="bg-gray-50 text-gray-800 flex-1 flex flex-col items-center justify-center font-sans p-4">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
-                    <Link href="/" className="text-4xl font-extrabold text-teal-600 tracking-wider">Nutrishiksha</Link>
                     <h1 className="text-2xl font-bold text-gray-900 mt-4">
                         {isLoginView ? 'Sign In to Your Dashboard' : 'Create Your Account'}
                     </h1>
@@ -235,7 +261,7 @@ function LoginForm() {
 // Loading fallback component
 function LoginPageSkeleton() {
     return (
-        <div className="bg-gray-50 text-gray-800 min-h-screen flex flex-col items-center justify-center font-sans p-4">
+        <div className="bg-gray-50 text-gray-800 flex-1 flex flex-col items-center justify-center font-sans p-4">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
                     <div className="text-4xl font-bold text-teal-600">Nutrishiksha</div>
@@ -257,8 +283,12 @@ function LoginPageSkeleton() {
 // Main page component with Suspense boundary
 export default function LoginPage() {
     return (
-        <Suspense fallback={<LoginPageSkeleton />}>
-            <LoginForm />
-        </Suspense>
+        <div className="bg-gray-50 min-h-screen flex flex-col">
+            <Header />
+            <Suspense fallback={<LoginPageSkeleton />}>
+                <LoginForm />
+            </Suspense>
+            <Footer />
+        </div>
     );
 }
