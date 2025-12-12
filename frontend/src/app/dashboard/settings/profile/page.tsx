@@ -3,21 +3,7 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useCallback, useEffect, useState, Suspense } from 'react';
-import {
-    CheckCircle,
-    Globe,
-    User,
-    Calendar,
-    DollarSign,
-    Sparkles,
-    Clock,
-    Save,
-    AlertCircle,
-    Check,
-    Info,
-    Loader2,
-    Minus
-} from 'lucide-react';
+import { CheckCircle, Globe, User, Calendar, DollarSign, Sparkles, Clock, Save, AlertCircle, Check, Info, Loader2, Minus } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -402,7 +388,8 @@ function ProfileSettingsContent() {
                                     type="text"
                                     value={profile?.full_name || ''}
                                     disabled
-                                    className="w-full bg-gray-100 border border-gray-300 rounded-xl px-4 py-3 text-gray-500 cursor-not-allowed"
+                                    // FIX: Ensuring text is black for high contrast
+                                    className="w-full bg-gray-100 border border-gray-300 rounded-xl px-4 py-3 text-black cursor-not-allowed"
                                 />
                             </div>
 
@@ -412,7 +399,8 @@ function ProfileSettingsContent() {
                                 <textarea
                                     value={profile?.bio || ''}
                                     onChange={(e) => handleProfileChange('bio', e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow resize-none"
+                                    // FIX: Ensuring text is black for high contrast
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow resize-none text-black"
                                     rows={4}
                                     placeholder="Tell clients about yourself, your experience, and approach..."
                                 />
@@ -427,7 +415,8 @@ function ProfileSettingsContent() {
                                         type="text"
                                         value={profile?.specialties?.join(', ') || ''}
                                         onChange={(e) => handleProfileChange('specialties', e.target.value.split(',').map(s => s.trim()))}
-                                        className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
+                                        // FIX: Ensuring text is black for high contrast
+                                        className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow text-black"
                                         placeholder="e.g., Weight Loss, Sports Nutrition"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">Separate with commas</p>
@@ -441,7 +430,8 @@ function ProfileSettingsContent() {
                                     type="text"
                                     value={profile?.interests?.join(', ') || ''}
                                     onChange={(e) => handleProfileChange('interests', e.target.value.split(',').map(s => s.trim()))}
-                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
+                                    // FIX: Ensuring text is black for high contrast
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow text-black"
                                     placeholder="e.g., Bodybuilding, Meditation"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Separate with commas</p>
@@ -458,7 +448,8 @@ function ProfileSettingsContent() {
                                         type="number"
                                         value={profile?.hourly_rate || ''}
                                         onChange={(e) => handleProfileChange('hourly_rate', parseFloat(e.target.value) || null)}
-                                        className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
+                                        // FIX: Ensuring text is black for high contrast
+                                        className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow text-black"
                                         placeholder="1500"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">First consultation is always free</p>
@@ -474,7 +465,8 @@ function ProfileSettingsContent() {
                                 <select
                                     value={profile?.timezone || detectedTimezone}
                                     onChange={(e) => handleProfileChange('timezone', e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
+                                    // FIX: Ensuring text is black for high contrast
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow text-black"
                                 >
                                     {Object.entries(timezoneGroups).map(([region, zones]) => (
                                         <optgroup key={region} label={region}>
@@ -545,7 +537,8 @@ function ProfileSettingsContent() {
                                                     <select
                                                         value={daySlot?.start_time || '09:00'}
                                                         onChange={(e) => handleAvailabilityChange(dayIndex, 'start_time', e.target.value)}
-                                                        className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-teal-500 focus:border-teal-500"
+                                                        // FIX: Ensuring text is black for high contrast
+                                                        className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-teal-500 focus:border-teal-500 text-black"
                                                     >
                                                         {timeOptions.map(time => (
                                                             <option key={time} value={time}>
@@ -558,7 +551,8 @@ function ProfileSettingsContent() {
                                                 <select
                                                     value={daySlot?.end_time || '17:00'}
                                                     onChange={(e) => handleAvailabilityChange(dayIndex, 'end_time', e.target.value)}
-                                                    className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-teal-500 focus:border-teal-500"
+                                                    // FIX: Ensuring text is black for high contrast
+                                                    className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-teal-500 focus:border-teal-500 text-black"
                                                 >
                                                     {timeOptions.map(time => (
                                                         <option key={time} value={time}>
@@ -679,6 +673,12 @@ function ProfileSettingsContent() {
                             <div className="flex items-center gap-2 text-green-600 font-bold">
                                 <Check size={20} />
                                 <span className="font-medium">Changes saved successfully!</span>
+                            </div>
+                        )}
+                        {saving && (
+                            <div className="flex items-center gap-2 text-gray-600">
+                                <Loader2 size={20} className="animate-spin" />
+                                <span className="font-medium">Saving...</span>
                             </div>
                         )}
                     </div>
