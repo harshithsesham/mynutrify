@@ -3,7 +3,21 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useCallback, useEffect, useState, Suspense } from 'react';
-import { CheckCircle, Globe, User, Calendar, DollarSign, Sparkles, Clock, Save, AlertCircle, Check, Info } from 'lucide-react';
+import {
+    CheckCircle,
+    Globe,
+    User,
+    Calendar,
+    DollarSign,
+    Sparkles,
+    Clock,
+    Save,
+    AlertCircle,
+    Check,
+    Info,
+    Loader2,
+    Minus
+} from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -11,6 +25,7 @@ import { toZonedTime } from 'date-fns-tz';
 // Type definitions
 type Profile = {
     full_name: string;
+    role: string; // Added role here for component logic
     bio: string | null;
     specialties: string[] | null;
     interests: string[] | null;
@@ -106,14 +121,12 @@ function ProfileSettingsContent() {
     const error = searchParams.get('error');
     const shouldRefresh = searchParams.get('refresh');
 
-    // Check calendar connection status - removed as it's now handled inline
-
     // Fetches all necessary data
     const getProfileData = useCallback(async (userId: string) => {
         setLoading(true);
         const { data: profileData, error: profileError } = await supabase
             .from('profiles')
-            .select('id, full_name, bio, specialties, interests, hourly_rate, google_refresh_token, timezone')
+            .select('id, full_name, role, bio, specialties, interests, hourly_rate, google_refresh_token, timezone')
             .eq('user_id', userId)
             .single();
 
@@ -128,10 +141,8 @@ function ProfileSettingsContent() {
             });
             setProfileId(profileData.id);
 
-            // Check calendar connection status (only check refresh token)
             const hasToken = !!profileData.google_refresh_token;
             setIsCalendarConnected(hasToken);
-            console.log('Calendar connected status:', hasToken, 'Refresh token present:', !!profileData.google_refresh_token);
 
             // Get availability data
             const { data: availabilityData } = await supabase
@@ -154,8 +165,6 @@ function ProfileSettingsContent() {
     // Re-check connection status if redirected from OAuth
     useEffect(() => {
         if (success === 'calendar_connected' || shouldRefresh) {
-            console.log('OAuth callback detected, refreshing connection status');
-            // Small delay to ensure database is updated
             setTimeout(async () => {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) {
@@ -170,26 +179,15 @@ function ProfileSettingsContent() {
         if (success === 'calendar_connected') {
             setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 5000);
-            // Clean up URL parameters
             router.replace('/dashboard/settings/profile', { scroll: false });
         } else if (error) {
-            // Handle different error types
             const message = searchParams.get('message') || '';
             const decodedMessage = decodeURIComponent(message);
 
-            // Skip showing alerts for certain error types
-            if (error === 'NO_REFRESH_TOKEN') {
-                // Don't show error for partial success
-                console.log('Calendar connected but no refresh token');
-            } else if (error === 'NOT_AUTHENTICATED') {
-                alert('Please log in first before connecting Google Calendar');
-            } else if (error === 'NO_TOKENS') {
-                alert('Google authorization failed. Please try again.');
-            } else if (decodedMessage && decodedMessage !== 'Unknown error') {
+            if (decodedMessage && decodedMessage !== 'Unknown error') {
                 alert(`Error: ${decodedMessage}`);
             }
 
-            // Clean up URL parameters
             router.replace('/dashboard/settings/profile', { scroll: false });
         }
     }, [success, error, searchParams, router]);
@@ -235,7 +233,6 @@ function ProfileSettingsContent() {
                     .eq('user_id', user.id);
 
                 if (error) {
-                    console.error('Error disconnecting calendar:', error);
                     alert('Failed to disconnect calendar');
                 } else {
                     setIsCalendarConnected(false);
@@ -249,7 +246,6 @@ function ProfileSettingsContent() {
                 }
             }
         } catch (error) {
-            console.error('Error disconnecting calendar:', error);
             alert('Failed to disconnect calendar');
         }
     };
@@ -260,6 +256,19 @@ function ProfileSettingsContent() {
         setSaving(true);
         setShowSuccess(false);
 
+        // 1. Validate times: ensure start < end for all slots
+        const invalidSlots = availability.filter(slot => {
+            return slot.start_time >= slot.end_time;
+        });
+
+        if (invalidSlots.length > 0) {
+            alert('Validation Error: Start time must be before end time for all enabled slots.');
+            setSaving(false);
+            return;
+        }
+
+
+        // 2. Update Profile
         const { error: profileError } = await supabase
             .from('profiles')
             .update({
@@ -277,6 +286,7 @@ function ProfileSettingsContent() {
             return;
         }
 
+        // 3. Update Availability (Delete all, then insert current list)
         const { error: deleteError } = await supabase.from('availability').delete().eq('professional_id', profileId);
         if (deleteError) {
             alert('Error clearing schedule: ' + deleteError.message);
@@ -306,86 +316,103 @@ function ProfileSettingsContent() {
     };
 
     if (loading) return (
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center justify-center min-h-[400px] w-full">
             <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto mb-4"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
                 <p className="text-gray-500">Loading Settings...</p>
             </div>
         </div>
     );
 
+    const isProfessional = profile?.role !== 'client'; // Assume anyone not explicitly a client might use pro settings
+
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Header */}
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-800 mb-2">Settings</h1>
-                <p className="text-gray-600">Manage your profile, availability, and integrations</p>
+                <h1 className="text-4xl font-extrabold text-gray-900 mb-2">My Settings</h1>
+                <p className="text-lg text-gray-600">Manage your profile, availability, and integrations</p>
             </div>
 
-            {/* Success Message for Calendar Connection */}
+            {/* Success/Error Message */}
             {success === 'calendar_connected' && (
-                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center gap-2 text-green-800">
-                        <CheckCircle size={20} />
-                        <span className="font-medium">Google Calendar connected successfully!</span>
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl shadow-sm">
+                    <div className="flex items-center gap-2 text-green-800 font-medium">
+                        <CheckCircle size={20} className="text-green-600" />
+                        <span>Google Calendar connected successfully!</span>
                     </div>
                 </div>
             )}
 
-            {/* Navigation Tabs */}
-            <div className="flex space-x-1 mb-8 bg-gray-100 p-1 rounded-lg">
+            {/* Navigation Tabs - Redesigned */}
+            <div className="flex space-x-1 mb-8 bg-gray-100 p-1 rounded-full shadow-inner">
                 <button
                     onClick={() => setActiveSection('profile')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-full font-bold transition-all duration-200 ${
                         activeSection === 'profile'
-                            ? 'bg-white text-gray-800 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-800'
+                            ? 'bg-teal-600 text-white shadow-md'
+                            : 'text-gray-700 hover:bg-gray-200'
                     }`}
                 >
                     <User size={18} />
                     <span>Profile</span>
                 </button>
-                <button
-                    onClick={() => setActiveSection('availability')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
-                        activeSection === 'availability'
-                            ? 'bg-white text-gray-800 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-800'
-                    }`}
-                >
-                    <Calendar size={18} />
-                    <span>Availability</span>
-                </button>
-                <button
-                    onClick={() => setActiveSection('integrations')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
-                        activeSection === 'integrations'
-                            ? 'bg-white text-gray-800 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-800'
-                    }`}
-                >
-                    <Sparkles size={18} />
-                    <span>Integrations</span>
-                </button>
+                {isProfessional && (
+                    <button
+                        onClick={() => setActiveSection('availability')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-full font-bold transition-all duration-200 ${
+                            activeSection === 'availability'
+                                ? 'bg-teal-600 text-white shadow-md'
+                                : 'text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        <Calendar size={18} />
+                        <span>Availability</span>
+                    </button>
+                )}
+                {isProfessional && (
+                    <button
+                        onClick={() => setActiveSection('integrations')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-full font-bold transition-all duration-200 ${
+                            activeSection === 'integrations'
+                                ? 'bg-teal-600 text-white shadow-md'
+                                : 'text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        <Sparkles size={18} />
+                        <span>Integrations</span>
+                    </button>
+                )}
             </div>
 
             {/* Profile Section */}
             {activeSection === 'profile' && (
                 <div className="space-y-6">
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 md:p-8">
-                        <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-                            <User size={20} />
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-xl p-6 md:p-8">
+                        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-teal-600">
+                            <User size={24} />
                             Profile Information
                         </h2>
 
                         <div className="grid gap-6 md:grid-cols-2">
+                            {/* Full Name (Read-only) */}
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                                <input
+                                    type="text"
+                                    value={profile?.full_name || ''}
+                                    disabled
+                                    className="w-full bg-gray-100 border border-gray-300 rounded-xl px-4 py-3 text-gray-500 cursor-not-allowed"
+                                />
+                            </div>
+
                             {/* Bio - Full Width */}
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
                                 <textarea
                                     value={profile?.bio || ''}
                                     onChange={(e) => handleProfileChange('bio', e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-all"
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow resize-none"
                                     rows={4}
                                     placeholder="Tell clients about yourself, your experience, and approach..."
                                 />
@@ -393,17 +420,19 @@ function ProfileSettingsContent() {
                             </div>
 
                             {/* Specialties */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Specialties</label>
-                                <input
-                                    type="text"
-                                    value={profile?.specialties?.join(', ') || ''}
-                                    onChange={(e) => handleProfileChange('specialties', e.target.value.split(',').map(s => s.trim()))}
-                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-all"
-                                    placeholder="e.g., Weight Loss, Sports Nutrition"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">Separate with commas</p>
-                            </div>
+                            {isProfessional && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Specialties</label>
+                                    <input
+                                        type="text"
+                                        value={profile?.specialties?.join(', ') || ''}
+                                        onChange={(e) => handleProfileChange('specialties', e.target.value.split(',').map(s => s.trim()))}
+                                        className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
+                                        placeholder="e.g., Weight Loss, Sports Nutrition"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Separate with commas</p>
+                                </div>
+                            )}
 
                             {/* Interests */}
                             <div>
@@ -412,38 +441,40 @@ function ProfileSettingsContent() {
                                     type="text"
                                     value={profile?.interests?.join(', ') || ''}
                                     onChange={(e) => handleProfileChange('interests', e.target.value.split(',').map(s => s.trim()))}
-                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-all"
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
                                     placeholder="e.g., Bodybuilding, Meditation"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Separate with commas</p>
                             </div>
 
                             {/* Hourly Rate */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    <DollarSign size={16} className="inline mr-1" />
-                                    Hourly Rate (₹)
-                                </label>
-                                <input
-                                    type="number"
-                                    value={profile?.hourly_rate || ''}
-                                    onChange={(e) => handleProfileChange('hourly_rate', parseFloat(e.target.value) || null)}
-                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-all"
-                                    placeholder="1500"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">First consultation is always free</p>
-                            </div>
+                            {isProfessional && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        <DollarSign size={16} className="inline mr-1 text-teal-600" />
+                                        Hourly Rate (₹)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={profile?.hourly_rate || ''}
+                                        onChange={(e) => handleProfileChange('hourly_rate', parseFloat(e.target.value) || null)}
+                                        className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
+                                        placeholder="1500"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">First consultation is always free</p>
+                                </div>
+                            )}
 
                             {/* Timezone */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    <Globe size={16} className="inline mr-1" />
+                                    <Globe size={16} className="inline mr-1 text-teal-600" />
                                     Your Timezone
                                 </label>
                                 <select
                                     value={profile?.timezone || detectedTimezone}
                                     onChange={(e) => handleProfileChange('timezone', e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-all"
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
                                 >
                                     {Object.entries(timezoneGroups).map(([region, zones]) => (
                                         <optgroup key={region} label={region}>
@@ -465,34 +496,35 @@ function ProfileSettingsContent() {
             )}
 
             {/* Availability Section */}
-            {activeSection === 'availability' && (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 md:p-8">
-                    <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
-                        <Calendar size={20} />
+            {activeSection === 'availability' && isProfessional && (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-xl p-6 md:p-8">
+                    <h2 className="text-2xl font-bold mb-2 flex items-center gap-3 text-teal-600">
+                        <Calendar size={24} />
                         Weekly Availability
                     </h2>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 border-b pb-4">
                         <p className="text-gray-600">
-                            Set your working hours for: <strong>{profile?.timezone || detectedTimezone}</strong>
+                            Set your working hours in: <strong>{profile?.timezone || detectedTimezone}</strong>
                         </p>
-                        <p className="text-sm text-gray-500">
-                            Current time: <strong>{getTimeInTimezone(profile?.timezone || detectedTimezone)}</strong>
+                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-2 sm:mt-0">
+                            <Clock size={16} className="text-teal-500" />
+                            Local time: <strong>{getTimeInTimezone(profile?.timezone || detectedTimezone)}</strong>
                         </p>
                     </div>
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                        <p className="text-sm text-blue-800">
-                            <Info size={14} className="inline mr-1" />
-                            These times are in your selected timezone. When clients book appointments, they&apos;ll see these times converted to their local timezone automatically.
+                    <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-6">
+                        <p className="text-sm text-teal-800 flex items-start gap-2">
+                            <Info size={16} className="flex-shrink-0 mt-0.5" />
+                            Clients will see these times converted to their local timezone. Ensure your timezone is correct in the Profile tab.
                         </p>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         {daysOfWeek.map((day, dayIndex) => {
                             const daySlot = availability.find(slot => slot.day_of_week === dayIndex);
                             const isEnabled = !!daySlot;
                             return (
-                                <div key={day} className={`p-4 rounded-lg border transition-all ${
-                                    isEnabled ? 'bg-gray-50 border-gray-300' : 'bg-white border-gray-200'
+                                <div key={day} className={`p-4 rounded-xl border transition-all ${
+                                    isEnabled ? 'bg-teal-50 border-teal-300' : 'bg-white border-gray-200 hover:bg-gray-50'
                                 }`}>
                                     <div className="flex items-center justify-between flex-wrap gap-4">
                                         <div className="flex items-center">
@@ -500,21 +532,20 @@ function ProfileSettingsContent() {
                                                 type="checkbox"
                                                 checked={isEnabled}
                                                 onChange={(e) => toggleDayAvailability(dayIndex, e.target.checked)}
-                                                className="h-5 w-5 rounded border-gray-300 text-gray-800 focus:ring-gray-700 mr-3"
+                                                className="h-5 w-5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 mr-3"
                                             />
-                                            <span className={`font-medium ${isEnabled ? 'text-gray-800' : 'text-gray-500'}`}>
+                                            <span className={`font-bold ${isEnabled ? 'text-teal-800' : 'text-gray-600'}`}>
                                                 {day}
                                             </span>
                                         </div>
 
-                                        {isEnabled && (
+                                        {isEnabled ? (
                                             <div className="flex items-center gap-3">
                                                 <div className="flex items-center gap-2">
-                                                    <Clock size={16} className="text-gray-500" />
                                                     <select
                                                         value={daySlot?.start_time || '09:00'}
                                                         onChange={(e) => handleAvailabilityChange(dayIndex, 'start_time', e.target.value)}
-                                                        className="bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800"
+                                                        className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-teal-500 focus:border-teal-500"
                                                     >
                                                         {timeOptions.map(time => (
                                                             <option key={time} value={time}>
@@ -523,11 +554,11 @@ function ProfileSettingsContent() {
                                                         ))}
                                                     </select>
                                                 </div>
-                                                <span className="text-gray-500">to</span>
+                                                <span className="text-gray-500 font-bold">to</span>
                                                 <select
                                                     value={daySlot?.end_time || '17:00'}
                                                     onChange={(e) => handleAvailabilityChange(dayIndex, 'end_time', e.target.value)}
-                                                    className="bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800"
+                                                    className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-teal-500 focus:border-teal-500"
                                                 >
                                                     {timeOptions.map(time => (
                                                         <option key={time} value={time}>
@@ -535,7 +566,21 @@ function ProfileSettingsContent() {
                                                         </option>
                                                     ))}
                                                 </select>
+                                                <button
+                                                    onClick={() => toggleDayAvailability(dayIndex, false)}
+                                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                                                    title="Remove Slot"
+                                                >
+                                                    <Minus size={18} />
+                                                </button>
                                             </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => toggleDayAvailability(dayIndex, true)}
+                                                className="text-teal-600 hover:text-teal-700 text-sm font-bold px-4 py-2 hover:bg-teal-50 rounded-full transition-colors"
+                                            >
+                                                + Add Full Day Slot
+                                            </button>
                                         )}
                                     </div>
                                 </div>
@@ -543,57 +588,51 @@ function ProfileSettingsContent() {
                         })}
                     </div>
 
-                    <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <p className="text-sm text-yellow-800">
-                            <AlertCircle size={16} className="inline mr-1" />
-                            <strong>Important:</strong> Times set here are in your {profile?.timezone || detectedTimezone} timezone.
-                            Clients in different timezones will see these converted to their local time automatically.
+                    <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                        <p className="text-sm text-yellow-800 flex items-center gap-2">
+                            <AlertCircle size={16} className="flex-shrink-0" />
+                            <strong>Warning:</strong> Ensure end time is later than start time for all slots before saving.
                         </p>
                     </div>
                 </div>
             )}
 
             {/* Integrations Section */}
-            {activeSection === 'integrations' && (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 md:p-8">
-                    <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
-                        <Sparkles size={20} />
+            {activeSection === 'integrations' && isProfessional && (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-xl p-6 md:p-8">
+                    <h2 className="text-2xl font-bold mb-2 flex items-center gap-3 text-teal-600">
+                        <Sparkles size={24} />
                         Integrations
                     </h2>
-                    <p className="text-gray-600 mb-6">
-                        Connect your favorite tools to enhance your coaching experience
+                    <p className="text-gray-600 mb-6 border-b pb-4">
+                        Connect your favorite tools to automate scheduling and communication.
                     </p>
 
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         {/* Google Calendar Integration */}
-                        <div className="p-6 border border-gray-200 rounded-lg">
+                        <div className="p-6 border border-gray-200 rounded-xl shadow-md">
                             <div className="flex items-start justify-between">
                                 <div className="flex gap-4">
-                                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
                                         <Calendar className="text-blue-600" size={24} />
                                     </div>
                                     <div>
-                                        <h3 className="font-semibold text-gray-800">Google Calendar</h3>
+                                        <h3 className="font-bold text-gray-900">Google Calendar</h3>
                                         <p className="text-sm text-gray-600 mt-1">
-                                            Automatically create Google Meet links for appointments
+                                            Automatically create Google Meet links and sync appointments.
                                         </p>
-                                        {isCalendarConnected && (
-                                            <p className="text-xs text-green-600 mt-2">
-                                                ✓ Connected - Calendar integration is active
-                                            </p>
-                                        )}
                                     </div>
                                 </div>
 
                                 {isCalendarConnected ? (
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
                                         <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
-                                            <CheckCircle size={16} />
+                                            <Check size={14} />
                                             <span className="text-sm font-medium">Connected</span>
                                         </div>
                                         <button
                                             onClick={handleDisconnectCalendar}
-                                            className="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                                            className="text-red-600 hover:text-red-700 text-sm font-medium px-4 py-2 hover:bg-red-50 rounded-full transition-colors border border-red-200"
                                         >
                                             Disconnect
                                         </button>
@@ -601,29 +640,29 @@ function ProfileSettingsContent() {
                                 ) : (
                                     <button
                                         onClick={handleConnectCalendar}
-                                        className="bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                                        className="bg-blue-600 text-white font-bold py-2.5 px-6 rounded-full hover:bg-blue-700 transition-colors text-sm shadow-md"
                                     >
-                                        Connect
+                                        Connect Google
                                     </button>
                                 )}
                             </div>
                         </div>
 
                         {/* Coming Soon Integrations */}
-                        <div className="p-6 border border-gray-200 rounded-lg opacity-60">
+                        <div className="p-6 border border-gray-200 rounded-xl shadow-sm opacity-60">
                             <div className="flex items-start justify-between">
                                 <div className="flex gap-4">
-                                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                                    <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
                                         <Calendar className="text-gray-400" size={24} />
                                     </div>
                                     <div>
-                                        <h3 className="font-semibold text-gray-800">Zoom</h3>
+                                        <h3 className="font-bold text-gray-800">Zoom</h3>
                                         <p className="text-sm text-gray-600 mt-1">
-                                            Create Zoom meetings for appointments
+                                            Create Zoom meetings for appointments.
                                         </p>
                                     </div>
                                 </div>
-                                <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
+                                <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full font-medium">
                                     Coming Soon
                                 </span>
                             </div>
@@ -633,11 +672,11 @@ function ProfileSettingsContent() {
             )}
 
             {/* Save Button - Fixed at bottom */}
-            <div className="sticky bottom-0 bg-gradient-to-t from-gray-50 to-transparent pt-8 pb-4 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-                <div className="flex items-center justify-between max-w-6xl mx-auto">
+            <div className="sticky bottom-0 bg-gradient-to-t from-gray-50/90 to-transparent pt-8 pb-4 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 z-20">
+                <div className="flex items-center justify-between max-w-6xl mx-auto p-4 bg-white rounded-full shadow-2xl border border-gray-200">
                     <div>
                         {showSuccess && (
-                            <div className="flex items-center gap-2 text-green-600">
+                            <div className="flex items-center gap-2 text-green-600 font-bold">
                                 <Check size={20} />
                                 <span className="font-medium">Changes saved successfully!</span>
                             </div>
@@ -646,11 +685,11 @@ function ProfileSettingsContent() {
                     <button
                         onClick={handleSaveChanges}
                         disabled={saving}
-                        className="bg-gray-800 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                        className="bg-teal-600 text-white font-bold py-3 px-6 rounded-full hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2 shadow-lg"
                     >
                         {saving ? (
                             <>
-                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                <Loader2 size={20} className="animate-spin" />
                                 Saving...
                             </>
                         ) : (
@@ -671,7 +710,7 @@ function SettingsLoading() {
     return (
         <div className="flex items-center justify-center min-h-screen">
             <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto mb-4"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
                 <p className="text-gray-500">Loading Settings...</p>
             </div>
         </div>
