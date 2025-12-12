@@ -3,10 +3,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { MessageSquare, FileText, Video, Clock, CheckCircle, User } from 'lucide-react';
+import { MessageSquare, FileText, Video, Clock, CheckCircle, User, DollarSign, Calendar, Info, Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 
+// --- TYPE DEFINITIONS ---
 type Nutritionist = {
     id: string;
     full_name: string;
@@ -38,10 +39,10 @@ type AssignmentRow = {
     assigned_at: string | null;
     assignment_reason: string | null;
     status: string;
-    // Supabase join can be object OR array depending on relationship metadata
     nutritionist: Nutritionist | Nutritionist[] | null;
 };
 
+// --- MAIN COMPONENT ---
 export default function MyNutritionistPage() {
     const supabase = createClientComponentClient();
     const [loading, setLoading] = useState(true);
@@ -74,24 +75,24 @@ export default function MyNutritionistPage() {
                 .from('nutritionist_assignments')
                 .select(
                     `
-          id,
-          assigned_at,
-          assignment_reason,
-          status,
-          nutritionist:nutritionist_id (
-            id,
-            full_name,
-            bio,
-            specializations,
-            hourly_rate,
-            timezone
-          )
-        `
+                        id,
+                        assigned_at,
+                        assignment_reason,
+                        status,
+                        nutritionist:nutritionist_id (
+                            id,
+                            full_name,
+                            bio,
+                            specializations,
+                            hourly_rate,
+                            timezone
+                        )
+                    `
                 )
                 .eq('client_id', profile.id)
                 .eq('status', 'active')
                 .maybeSingle()
-                .returns<AssignmentRow>(); // <-- key for correct TS type
+                .returns<AssignmentRow>();
 
             if (assignErr) throw assignErr;
 
@@ -165,8 +166,8 @@ export default function MyNutritionistPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800" />
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 size={32} className="animate-spin text-teal-600 mx-auto" />
             </div>
         );
     }
@@ -174,16 +175,18 @@ export default function MyNutritionistPage() {
     if (!assignment) {
         return (
             <div className="max-w-4xl mx-auto px-4 py-8">
-                <h1 className="text-3xl font-bold mb-8">My Nutritionist</h1>
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                    <User size={48} className="mx-auto text-yellow-600 mb-4" />
-                    <h2 className="text-xl font-semibold mb-2">No Nutritionist Assigned Yet</h2>
-                    <p className="text-yellow-800 mb-4">
-                        You&apos;ll be assigned a nutritionist after your initial health consultation.
+                <h1 className="text-4xl font-extrabold text-gray-900 mb-8">My Professional</h1>
+                <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center shadow-xl">
+                    <div className="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <User size={32} className="text-yellow-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">No Professional Assigned Yet</h2>
+                    <p className="text-gray-600 mb-6">
+                        You&apos;ll be assigned a professional after your initial health consultation is completed.
                     </p>
                     <Link
                         href="/book-consultation"
-                        className="inline-block bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700"
+                        className="inline-block bg-teal-600 text-white font-bold py-3 px-6 rounded-full hover:bg-teal-700 transition-colors shadow-lg"
                     >
                         Book Initial Consultation
                     </Link>
@@ -192,77 +195,83 @@ export default function MyNutritionistPage() {
         );
     }
 
+    // --- RENDER ASSIGNED PROFESSIONAL ---
     return (
         <div className="max-w-4xl mx-auto px-4 py-8">
-            <h1 className="text-3xl font-bold mb-8">My Nutritionist</h1>
+            <h1 className="text-4xl font-extrabold text-gray-900 mb-8">My Professional</h1>
 
-            {/* Nutritionist Info Card */}
-            <div className="bg-white rounded-2xl border shadow-sm p-8 mb-8">
-                <div className="mb-6">
-                    <div className="flex items-start justify-between">
-                        <div>
-                            <h2 className="text-2xl font-semibold mb-2">
-                                {assignment.nutritionist.full_name}
-                            </h2>
-                            <p className="text-gray-600 mb-4">
-                                {(assignment.nutritionist.specializations ?? []).join(', ')}
-                            </p>
-                            {assignment.nutritionist.bio && (
-                                <p className="text-gray-700 mb-4">{assignment.nutritionist.bio}</p>
-                            )}
-                            <div className="text-sm text-gray-600">
-                                {assignment.assigned_at && (
-                                    <p>
-                                        Assigned on:{' '}
-                                        {format(parseISO(assignment.assigned_at), 'MMMM dd, yyyy')}
-                                    </p>
-                                )}
-                                {assignment.assignment_reason && (
-                                    <p className="mt-1">Reason: {assignment.assignment_reason}</p>
-                                )}
-                            </div>
-                        </div>
-                        <div className="text-right">
-                            {assignment.nutritionist.hourly_rate !== null && (
-                                <p className="text-lg font-semibold">
-                                    ₹{assignment.nutritionist.hourly_rate}/hour
-                                </p>
-                            )}
-                            <p className="text-sm text-gray-500">
-                                Timezone: {assignment.nutritionist.timezone ?? '—'}
-                            </p>
-                        </div>
+            {/* Nutritionist Info Card (Redesigned) */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-xl p-6 sm:p-8 mb-8">
+                <div className="flex items-center gap-6 mb-6 border-b pb-4">
+                    <div className="w-16 h-16 bg-teal-50 rounded-full flex items-center justify-center flex-shrink-0">
+                        <User size={32} className="text-teal-600" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900">
+                            {assignment.nutritionist.full_name}
+                        </h2>
+                        <p className="text-gray-600 font-medium capitalize">
+                            {assignment.nutritionist.specializations?.join(', ') || 'Nutrition Professional'}
+                        </p>
                     </div>
                 </div>
 
-                {/* Status Card */}
-                {upcomingAppointments.length === 0 && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                        <div className="flex items-center gap-3">
-                            <Clock className="text-blue-600" size={24} />
-                            <div>
-                                <p className="font-medium text-blue-900">Awaiting Schedule</p>
-                                <p className="text-sm text-blue-700">
-                                    Your nutritionist will schedule your next session based on your
-                                    progress and needs.
-                                </p>
-                            </div>
+                {/* Details and Actions */}
+                <div className="grid gap-6">
+                    {assignment.nutritionist.bio && (
+                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                            <p className="text-sm font-semibold text-gray-900 mb-1">Bio:</p>
+                            <p className="text-gray-700 text-sm">{assignment.nutritionist.bio}</p>
+                        </div>
+                    )}
+
+                    {/* Key Metrics */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                        <div className="bg-gray-50 rounded-lg p-3">
+                            <p className="font-semibold text-xs uppercase text-gray-600 mb-1">Assigned Date</p>
+                            <p className="text-gray-900 font-bold flex items-center gap-1">
+                                <Calendar size={14} className="text-teal-500" />
+                                {assignment.assigned_at ? format(parseISO(assignment.assigned_at), 'MMM dd, yyyy') : '—'}
+                            </p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                            <p className="font-semibold text-xs uppercase text-gray-600 mb-1">Hourly Rate</p>
+                            <p className="text-gray-900 font-bold flex items-center gap-1">
+                                <DollarSign size={14} className="text-teal-500" />
+                                {assignment.nutritionist.hourly_rate !== null ? `₹${assignment.nutritionist.hourly_rate}/hr` : 'N/A'}
+                            </p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                            <p className="font-semibold text-xs uppercase text-gray-600 mb-1">Timezone</p>
+                            <p className="text-gray-900 font-bold">
+                                {/* FIX: Explicitly stating IST as the default if timezone is null or empty */}
+                                {assignment.nutritionist.timezone ? assignment.nutritionist.timezone.split('/').pop()?.replace('_', ' ') : 'IST'}
+                            </p>
                         </div>
                     </div>
-                )}
 
-                {/* Contact Options */}
-                <div className="flex gap-4">
+                    {assignment.assignment_reason && (
+                        <div className="bg-teal-50 border border-teal-200 rounded-xl p-4">
+                            <p className="text-sm text-teal-800">
+                                <Info size={16} className="inline mr-1" />
+                                <span className="font-bold">Reason:</span> {assignment.assignment_reason}
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Contact Options (Redesigned) */}
+                <div className="flex flex-col sm:flex-row gap-4 mt-8">
                     <Link
                         href={`/dashboard/messages?to=${assignment.nutritionist.id}`}
-                        className="flex-1 bg-gray-200 text-gray-800 font-medium py-3 px-4 rounded-lg hover:bg-gray-300 flex items-center justify-center gap-2"
+                        className="flex-1 bg-teal-600 text-white font-bold py-3 px-4 rounded-full hover:bg-teal-700 flex items-center justify-center gap-2 shadow-lg transition-colors"
                     >
                         <MessageSquare size={18} />
                         Send Message
                     </Link>
                     <Link
                         href="/dashboard/my-plans"
-                        className="flex-1 bg-gray-200 text-gray-800 font-medium py-3 px-4 rounded-lg hover:bg-gray-300 flex items-center justify-center gap-2"
+                        className="flex-1 bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-full hover:bg-gray-300 flex items-center justify-center gap-2 transition-colors"
                     >
                         <FileText size={18} />
                         View My Plans
@@ -273,40 +282,39 @@ export default function MyNutritionistPage() {
             {/* Upcoming Appointments */}
             {upcomingAppointments.length > 0 && (
                 <div className="mb-8">
-                    <h3 className="text-xl font-semibold mb-4">Upcoming Sessions</h3>
+                    <h3 className="text-2xl font-bold mb-4 text-gray-900">Upcoming Sessions</h3>
                     <div className="space-y-4">
                         {upcomingAppointments.map((apt) => (
-                            <div key={apt.id} className="bg-white border rounded-lg p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="font-medium text-lg">
-                                            {format(parseISO(apt.start_time), 'EEEE, MMMM do, yyyy')}
+                            <div key={apt.id} className="bg-white border border-gray-200 rounded-xl p-6 shadow-md">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                    <div className="flex-1">
+                                        <p className="font-bold text-gray-900 text-lg">
+                                            {format(parseISO(apt.start_time), 'EEEE, MMMM do')}
                                         </p>
-                                        <p className="text-gray-600">
+                                        <p className="text-gray-700 font-medium">
                                             {format(parseISO(apt.start_time), 'h:mm a')} -{' '}
-                                            {format(parseISO(apt.end_time), 'h:mm a')}
+                                            {format(parseISO(apt.end_time), 'h:mm a')} (IST) {/* Showing IST as discussed */}
                                         </p>
                                         {apt.session_type && (
                                             <p className="text-sm text-gray-500 mt-1">
                                                 Type: {apt.session_type}
                                             </p>
                                         )}
-                                        {apt.session_notes && (
-                                            <p className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded">
-                                                Note: {apt.session_notes}
-                                            </p>
-                                        )}
                                     </div>
-                                    {apt.meeting_link && (
+                                    {apt.meeting_link ? (
                                         <a
                                             href={apt.meeting_link}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
+                                            className="bg-green-600 text-white px-4 py-2 rounded-full hover:bg-green-700 flex items-center gap-2 font-semibold shadow-sm transition-colors"
                                         >
                                             <Video size={16} />
                                             Join Call
                                         </a>
+                                    ) : (
+                                        <div className="bg-gray-100 text-gray-600 px-4 py-2 rounded-full text-sm font-medium">
+                                            Link Pending
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -318,20 +326,23 @@ export default function MyNutritionistPage() {
             {/* Past Appointments */}
             {pastAppointments.length > 0 && (
                 <div>
-                    <h3 className="text-xl font-semibold mb-4">Session History</h3>
+                    <h3 className="text-2xl font-bold mb-4 text-gray-900">Session History</h3>
                     <div className="space-y-3">
                         {pastAppointments.map((apt) => (
-                            <div key={apt.id} className="bg-gray-50 border rounded-lg p-4">
+                            <div key={apt.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <p className="font-medium">
+                                        <p className="font-medium text-gray-800">
                                             {format(parseISO(apt.start_time), 'MMM dd, yyyy')}
                                         </p>
                                         <p className="text-sm text-gray-600">
                                             {apt.session_type ?? 'Regular Session'}
                                         </p>
                                     </div>
-                                    <CheckCircle className="text-green-600" size={20} />
+                                    <div className="flex items-center gap-2 text-green-600 font-medium">
+                                        <CheckCircle size={18} />
+                                        Completed
+                                    </div>
                                 </div>
                             </div>
                         ))}
