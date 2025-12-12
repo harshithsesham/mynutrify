@@ -16,11 +16,10 @@ type AppointmentWithOtherParty = {
 };
 
 export default async function DashboardPage() {
-    // 1. Await cookies() properly for Next.js
     const cookieStore = await cookies();
     const supabase = createServerComponentClient({ cookies: () => cookieStore as any });
 
-    // 2. Use getUser() for secure server-side validation
+    // 1. Auth and Profile Check
     const { data: { user }, error } = await supabase.auth.getUser();
 
     if (error || !user) {
@@ -42,6 +41,7 @@ export default async function DashboardPage() {
     }
 
     let upcomingAppointments: AppointmentWithOtherParty[] = [];
+    const nowISO = new Date().toISOString();
 
     if (profile.role === 'client') {
         // Fetch appointments for client
@@ -50,14 +50,13 @@ export default async function DashboardPage() {
             .select('*, professional:professional_id(full_name)')
             .eq('client_id', profile.id)
             .eq('status', 'confirmed')
-            .gte('start_time', new Date().toISOString())
+            .gte('start_time', nowISO)
             .order('start_time', { ascending: true })
             .limit(3);
 
         upcomingAppointments = data || [];
 
     } else if (profile.role === 'health_coach') {
-        // For health coaches - get scheduled consultation requests and direct appointments
         try {
             const { data: healthCoachData } = await supabase
                 .from('health_coaches')
@@ -87,8 +86,6 @@ export default async function DashboardPage() {
                         try {
                             const datePart = consultation.scheduled_date;
                             const timePart = consultation.scheduled_time || '09:00';
-                            // Note: Appending T00:00:00.000Z forces UTC, which may misrepresent IST if not handled client-side.
-                            // However, sticking to the existing pattern to avoid functional changes in this prototype.
                             dateTime = `${datePart}T${timePart}:00.000Z`;
                         } catch (error) {
                             dateTime = new Date().toISOString();
@@ -109,7 +106,7 @@ export default async function DashboardPage() {
                     .select('*, client:client_id(full_name)')
                     .eq('professional_id', profile.id)
                     .eq('status', 'confirmed')
-                    .gte('start_time', new Date().toISOString())
+                    .gte('start_time', nowISO)
                     .order('start_time', { ascending: true })
                     .limit(3);
 
@@ -120,6 +117,7 @@ export default async function DashboardPage() {
 
                 // Combine and sort by start time
                 upcomingAppointments = [...consultationAppointments, ...regularAppointments]
+                    .filter(apt => new Date(apt.start_time).getTime() >= new Date(nowISO).getTime())
                     .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
                     .slice(0, 3);
             }
@@ -135,7 +133,7 @@ export default async function DashboardPage() {
             .select('*, client:client_id(full_name)')
             .eq('professional_id', profile.id)
             .eq('status', 'confirmed')
-            .gte('start_time', new Date().toISOString())
+            .gte('start_time', nowISO)
             .order('start_time', { ascending: true })
             .limit(3);
 
