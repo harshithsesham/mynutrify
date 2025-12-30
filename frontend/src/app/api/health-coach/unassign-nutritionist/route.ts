@@ -6,60 +6,64 @@ export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies });
 
     try {
-        const { assignmentId, reason } = await req.json();
+        const body = await req.json();
+        const { assignmentId, reason } = body;
 
-        // 1. Check Auth
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Auth failed', details: authError }, { status: 401 });
+        if (!assignmentId) {
+            return NextResponse.json({ error: 'Missing Assignment ID' }, { status: 400 });
         }
 
-        // 2. Fetch assignment BEFORE update
-        const { data: assignment, error: fetchErr } = await supabase
+        // 1. Get Assignment Details
+        const { data: assignment, error: fetchError } = await supabase
             .from('nutritionist_assignments')
             .select('*')
             .eq('id', assignmentId)
             .single();
 
-        if (fetchErr || !assignment) {
-            return NextResponse.json({ error: 'Assignment not found', details: fetchErr }, { status: 404 });
+        if (fetchError || !assignment) {
+            return NextResponse.json({ error: 'Assignment not found', details: fetchError }, { status: 404 });
         }
 
-        // 3. Perform the update
-        const { error: updateErr } = await supabase
+        // 2. Perform the Unassign Update
+        const { error: updateError } = await supabase
             .from('nutritionist_assignments')
             .update({
                 status: 'inactive',
                 unassigned_at: new Date().toISOString(),
-                unassignment_reason: reason || 'Unassigned by coach'
+                unassignment_reason: reason || 'Unassigned by health coach'
             })
             .eq('id', assignmentId);
 
-        if (updateErr) {
-            return NextResponse.json({ error: 'Database Update Failed', details: updateErr }, { status: 500 });
+        if (updateError) {
+            console.error('Update Error:', updateError);
+            return NextResponse.json({ error: 'Table update failed', details: updateError }, { status: 500 });
         }
 
-        // 4. Cleanup related tables (Consultations)
-        await supabase
-            .from('consultation_requests')
-            .update({ assigned_nutritionist_id: null })
-            .eq('client_id', assignment.client_id)
-            .eq('assigned_nutritionist_id', assignment.nutritionist_id);
+        // 3. Cleanup Consultation Request
+        // We use a try/catch block here so if these secondary tables fail,
+        // the main unassignment still succeeds.
+        try {
+            await supabase
+                .from('consultation_requests')
+                .update({ assigned_nutritionist_id: null })
+                .eq('client_id', assignment.client_id)
+                .eq('assigned_nutritionist_id', assignment.nutritionist_id);
 
-        // 5. Cleanup related tables (Relationships)
-        await supabase
-            .from('coach_clients')
-            .delete()
-            .eq('coach_id', assignment.nutritionist_id)
-            .eq('client_id', assignment.client_id);
+            await supabase
+                .from('coach_clients')
+                .delete()
+                .eq('coach_id', assignment.nutritionist_id)
+                .eq('client_id', assignment.client_id);
+        } catch (cleanupError) {
+            console.warn('Minor cleanup error:', cleanupError);
+        }
 
         return NextResponse.json({ success: true });
 
-    } catch (error: any) {
-        console.error('API Error:', error);
+    } catch (err: any) {
         return NextResponse.json({
-            error: 'Server crash',
-            message: error.message
+            error: 'Server Exception',
+            message: err.message
         }, { status: 500 });
     }
 }
