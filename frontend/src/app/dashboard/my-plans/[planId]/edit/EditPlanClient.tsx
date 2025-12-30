@@ -333,7 +333,7 @@ export default function EditPlanClient({ plan, initialEntries }: EditPlanClientP
                                 type="text"
                                 value={planTitle}
                                 onChange={(e) => setPlanTitle(e.target.value)}
-                                className="w-full text-xl font-medium bg-gray-50 border-2 border-gray-700 rounded-xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                className="w-full text-xl font-medium text-gray-900 bg-gray-50 border-2 border-gray-200 rounded-xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                 placeholder="Enter plan name..."
                             />
                         </div>
