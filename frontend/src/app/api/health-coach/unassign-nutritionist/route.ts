@@ -6,41 +6,40 @@ export async function POST(req: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies });
 
     try {
-        const { assignmentId, reason } = await req.json();
+        const body = await req.json();
+        const { assignmentId, reason } = body;
 
         if (!assignmentId) {
             return NextResponse.json({ error: 'Missing Assignment ID' }, { status: 400 });
         }
 
-        // 1. Verify User is a Health Coach
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
+        // 1. Verify User Role
+        const { data: { user } } = await supabase.auth.getUser();
         const { data: profile } = await supabase
             .from('profiles')
             .select('role')
-            .eq('user_id', user.id)
+            .eq('user_id', user?.id)
             .single();
 
         if (profile?.role !== 'health_coach') {
-            return NextResponse.json({ error: 'Forbidden: User is not a health coach' }, { status: 403 });
+            return NextResponse.json({ error: 'Unauthorized: Health Coach only' }, { status: 403 });
         }
 
-        // 2. Fetch assignment details before updating to know who to unassign
-        const { data: assignment, error: fetchError } = await supabase
+        // 2. Fetch Assignment Data
+        const { data: assignment, error: fetchErr } = await supabase
             .from('nutritionist_assignments')
-            .select('client_id, nutritionist_id')
+            .select('*')
             .eq('id', assignmentId)
             .single();
 
-        if (fetchError || !assignment) {
+        if (fetchErr || !assignment) {
+            console.error('Fetch Error:', fetchErr);
             return NextResponse.json({ error: 'Assignment record not found' }, { status: 404 });
         }
 
-        // 3. Update the assignment status to inactive
-        const { error: updateError } = await supabase
+        // 3. Update Assignment Status
+        // Use ISO string for the timestamp
+        const { error: updateErr } = await supabase
             .from('nutritionist_assignments')
             .update({
                 status: 'inactive',
@@ -49,33 +48,36 @@ export async function POST(req: NextRequest) {
             })
             .eq('id', assignmentId);
 
-        if (updateError) throw updateError;
+        if (updateErr) {
+            console.error('Update assignments table failed:', updateErr);
+            throw updateErr;
+        }
 
-        // 4. Clear the nutritionist link in consultation_requests
-        // This allows the client to be assigned to someone else later
-        await supabase
+        // 4. Update Consultation Request
+        const { error: consultErr } = await supabase
             .from('consultation_requests')
             .update({ assigned_nutritionist_id: null })
             .eq('client_id', assignment.client_id)
             .eq('assigned_nutritionist_id', assignment.nutritionist_id);
 
-        // 5. Remove the coach-client relationship link
-        await supabase
+        if (consultErr) console.warn('Note: Could not update consultation_requests:', consultErr.message);
+
+        // 5. Remove Coach-Client relationship
+        const { error: deleteErr } = await supabase
             .from('coach_clients')
             .delete()
             .eq('coach_id', assignment.nutritionist_id)
             .eq('client_id', assignment.client_id);
 
-        return NextResponse.json({
-            success: true,
-            message: 'Professional unassigned and relationship cleaned up successfully'
-        });
+        if (deleteErr) console.warn('Note: Could not delete coach_clients link:', deleteErr.message);
 
-    } catch (error) {
-        console.error('💥 Unassign API Error:', error);
+        return NextResponse.json({ success: true });
+
+    } catch (error: any) {
+        console.error('CRITICAL UNASSIGN ERROR:', error);
         return NextResponse.json({
             error: 'Internal server error',
-            details: error instanceof Error ? error.message : 'Unknown error'
+            details: error.message || 'Unknown error'
         }, { status: 500 });
     }
 }
