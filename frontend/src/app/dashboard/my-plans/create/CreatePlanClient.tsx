@@ -183,7 +183,7 @@ export default function CreatePlanClient() {
                                 type="text"
                                 value={planTitle}
                                 onChange={(e) => setPlanTitle(e.target.value)}
-                                className="w-full text-lg font-medium bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent"
+                                className="w-full text-lg font-medium bg-gray-50 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent"
                                 placeholder="Enter plan name..."
                             />
                         </div>
