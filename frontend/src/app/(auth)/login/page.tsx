@@ -238,7 +238,7 @@ function LoginForm() {
                     </form>
 
                     <p className="text-center text-gray-600 mt-6 pt-4 border-t border-gray-100">
-                        {isLoginView ? "Don&apos;t have an account?" : "Already have an account?"}
+                        {isLoginView ? "Don't have an account?" : "Already have an account?"}
                         <button
                             onClick={() => {
                                 setIsLoginView(!isLoginView);
