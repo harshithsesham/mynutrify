@@ -3,28 +3,39 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
-    const supabase = createRouteHandlerClient({ cookies });
+    // 1. Await the cookies (Next.js 15+ requirement)
+    const cookieStore = await cookies();
+
+    // 2. Initialize Supabase
+    // We cast the return to 'any' to satisfy the outdated TypeScript definitions
+    // in the auth-helpers-nextjs package for Next.js 15/16.
+    const supabase = createRouteHandlerClient({
+        cookies: () => cookieStore as any
+    });
 
     try {
-        const body = await req.json();
-        const { assignmentId, reason } = body;
+        const { assignmentId, reason } = await req.json();
 
         if (!assignmentId) {
             return NextResponse.json({ error: 'Missing Assignment ID' }, { status: 400 });
         }
 
-        // 1. Get Assignment Details
+        // 3. Fetch assignment details (using maybeSingle to handle errors gracefully)
         const { data: assignment, error: fetchError } = await supabase
             .from('nutritionist_assignments')
             .select('*')
             .eq('id', assignmentId)
-            .single();
+            .maybeSingle();
 
-        if (fetchError || !assignment) {
-            return NextResponse.json({ error: 'Assignment not found', details: fetchError }, { status: 404 });
+        if (fetchError) {
+            return NextResponse.json({ error: 'Database query failed', details: fetchError.message }, { status: 500 });
         }
 
-        // 2. Perform the Unassign Update
+        if (!assignment) {
+            return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+        }
+
+        // 4. Update the assignment to inactive
         const { error: updateError } = await supabase
             .from('nutritionist_assignments')
             .update({
@@ -35,32 +46,28 @@ export async function POST(req: NextRequest) {
             .eq('id', assignmentId);
 
         if (updateError) {
-            console.error('Update Error:', updateError);
-            return NextResponse.json({ error: 'Table update failed', details: updateError }, { status: 500 });
+            return NextResponse.json({ error: 'Update failed', details: updateError }, { status: 500 });
         }
 
-        // 3. Cleanup Consultation Request
-        // We use a try/catch block here so if these secondary tables fail,
-        // the main unassignment still succeeds.
-        try {
-            await supabase
-                .from('consultation_requests')
-                .update({ assigned_nutritionist_id: null })
-                .eq('client_id', assignment.client_id)
-                .eq('assigned_nutritionist_id', assignment.nutritionist_id);
+        // 5. Cleanup related tables
+        // Reset consultation request status
+        await supabase
+            .from('consultation_requests')
+            .update({ assigned_nutritionist_id: null })
+            .eq('client_id', assignment.client_id)
+            .eq('assigned_nutritionist_id', assignment.nutritionist_id);
 
-            await supabase
-                .from('coach_clients')
-                .delete()
-                .eq('coach_id', assignment.nutritionist_id)
-                .eq('client_id', assignment.client_id);
-        } catch (cleanupError) {
-            console.warn('Minor cleanup error:', cleanupError);
-        }
+        // Delete the professional-client permission link
+        await supabase
+            .from('coach_clients')
+            .delete()
+            .eq('coach_id', assignment.nutritionist_id)
+            .eq('client_id', assignment.client_id);
 
         return NextResponse.json({ success: true });
 
     } catch (err: any) {
+        console.error('API Error:', err);
         return NextResponse.json({
             error: 'Server Exception',
             message: err.message
