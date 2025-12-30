@@ -8,7 +8,7 @@ import React from 'react';
 export const dynamic = 'force-dynamic';
 
 type PageProps = {
-    params: { planId: string };
+    params: Promise<{ planId: string }>; // Updated to reflect that params is a Promise
 };
 
 // Define the required data structure for the plan
@@ -26,9 +26,18 @@ interface PlanData {
 }
 
 export default async function PlanDetailPage({ params }: PageProps): Promise<React.ReactElement> {
+    // FIX: Await the params object before accessing planId
+    const resolvedParams = await params;
+    const planId = resolvedParams.planId;
+
+    // Safety check: if planId is missing or the string "undefined", redirect early
+    if (!planId || planId === 'undefined') {
+        console.error(`[PlanDetailPage] Invalid Plan ID: ${planId}`);
+        return redirect('/dashboard/my-plans');
+    }
+
     const cookieStore = await cookies();
     const supabase = createServerComponentClient({ cookies: () => cookieStore as any });
-    const planId = params.planId;
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -73,15 +82,13 @@ export default async function PlanDetailPage({ params }: PageProps): Promise<Rea
 
     const [{ data: plan, error: planError }, { data: entries, error: entriesError }] = await Promise.all([planPromise, entriesPromise]);
 
-    // 3. Robust Failure Handling and Authorization Check (FIX)
-
-    // Redirect if the database query failed (e.g., plan not found, invalid ID)
+    // 3. Failure Handling and Authorization Check
     if (planError || !plan) {
-        console.error(`[PlanDetailPage] Crash prevention redirect. Error: ${planError?.message || 'Plan not found.'}`);
+        console.error(`[PlanDetailPage] Database error or plan not found. Error: ${planError?.message || 'Plan not found.'}`);
         return redirect('/dashboard/my-plans');
     }
 
-    // FIX: Allow access if the user is the assigned client OR the plan creator.
+    // Check authorization: User must be the assigned client OR the plan creator
     const isAuthorized = (plan.assigned_to_id === currentProfileId) || (plan.created_by_id === currentProfileId);
 
     if (!isAuthorized) {
@@ -91,10 +98,8 @@ export default async function PlanDetailPage({ params }: PageProps): Promise<Rea
 
     if (entriesError) {
         console.error(`[PlanDetailPage] Error fetching entries for plan ${planId}:`, entriesError);
-        // We render the plan details even if entries fail to load, passing an empty array.
     }
 
-    // Ensure type compatibility before passing to Client Component
     const typedPlan = plan as unknown as PlanData;
 
     return <PlanDetailClient plan={typedPlan} initialEntries={entries || []} />;
