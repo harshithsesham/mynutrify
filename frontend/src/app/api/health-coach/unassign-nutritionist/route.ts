@@ -7,20 +7,18 @@ export async function POST(req: NextRequest) {
     const cookieStore = await cookies();
 
     // 2. Initialize Supabase
-    // We cast the return to 'any' to satisfy the outdated TypeScript definitions
-    // in the auth-helpers-nextjs package for Next.js 15/16.
     const supabase = createRouteHandlerClient({
         cookies: () => cookieStore as any
     });
 
     try {
-        const { assignmentId, reason } = await req.json();
+        const { assignmentId } = await req.json();
 
         if (!assignmentId) {
             return NextResponse.json({ error: 'Missing Assignment ID' }, { status: 400 });
         }
 
-        // 3. Fetch assignment details (using maybeSingle to handle errors gracefully)
+        // 3. Fetch assignment details first to get client/nutritionist IDs for cleanup
         const { data: assignment, error: fetchError } = await supabase
             .from('nutritionist_assignments')
             .select('*')
@@ -35,29 +33,25 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
         }
 
-        // 4. Update the assignment to inactive
-        const { error: updateError } = await supabase
+        // 4. FIX: Delete the assignment row instead of updating it to 'inactive'
+        const { error: deleteError } = await supabase
             .from('nutritionist_assignments')
-            .update({
-                status: 'inactive',
-                unassigned_at: new Date().toISOString(),
-                unassignment_reason: reason || 'Unassigned by health coach'
-            })
+            .delete()
             .eq('id', assignmentId);
 
-        if (updateError) {
-            return NextResponse.json({ error: 'Update failed', details: updateError }, { status: 500 });
+        if (deleteError) {
+            return NextResponse.json({ error: 'Deletion failed', details: deleteError }, { status: 500 });
         }
 
         // 5. Cleanup related tables
-        // Reset consultation request status
+        // Reset consultation request status so the client can be assigned again
         await supabase
             .from('consultation_requests')
             .update({ assigned_nutritionist_id: null })
             .eq('client_id', assignment.client_id)
             .eq('assigned_nutritionist_id', assignment.nutritionist_id);
 
-        // Delete the professional-client permission link
+        // Delete the professional-client permission link to revoke data access
         await supabase
             .from('coach_clients')
             .delete()
